@@ -1,0 +1,61 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: macOS build and test
+    runs-on: macos-26
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Install pinned Go toolchain
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - name: Verify formatting
+        shell: bash
+        run: |
+          unformatted="$(gofmt -l ./cmd ./internal)"
+          if [[ -n "${unformatted}" ]]; then
+            printf '%s\n' "${unformatted}"
+            exit 1
+          fi
+
+      - name: Vet source
+        run: go vet ./...
+
+      - name: Run race-enabled tests
+        run: go test -race ./...
+
+      - name: Run shuffled tests
+        run: go test -shuffle=on -count=3 ./...
+
+      - name: Build CLI
+        run: go build -trimpath -o ./bin/macscope ./cmd/macscope
+
+      - name: Smoke-test CLI
+        shell: bash
+        run: |
+          MACSCOPE_NO_BANNER=1 ./bin/macscope version
+          first_line="$(MACSCOPE_NO_BANNER=1 ./bin/macscope help | sed -n '1p')"
+          if [[ "${first_line}" != "Usage:" ]]; then
+            printf 'unexpected help output: %s\n' "${first_line}"
+            exit 1
+          fi

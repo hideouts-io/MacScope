@@ -1,0 +1,15 @@
+check-for-app-update: false
+enrich: []
+license:
+  content: none
+golang:
+  search-local-mod-cache-licenses: false
+  search-local-vendor-licenses: false
+  search-remote-licenses: false
+java:
+  use-network: false
+  use-maven-local-repository: false
+javascript:
+  search-remote-licenses: false
+python:
+  search-remote-licenses: false

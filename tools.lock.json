@@ -1,0 +1,48 @@
+{
+  "schema_version": "1",
+  "tools": {
+    "go": {
+      "version": "1.26.5",
+      "platform": "darwin-arm64",
+      "archive": "go1.26.5.darwin-arm64.tar.gz",
+      "url": "https://go.dev/dl/go1.26.5.darwin-arm64.tar.gz",
+      "sha256": "efb87ff28af9a188d0536ef5d42e63dd52ba8263cd7344a993cc48dd11dedb6a"
+    },
+    "osquery": {
+      "version": "5.21.0",
+      "commit": "538587f3ac9de46de5748ef4063ebeffcf20af85",
+      "platform": "darwin-arm64",
+      "archive": "osquery-5.21.0_1.macos_arm64.tar.gz",
+      "url": "https://github.com/osquery/osquery/releases/download/5.21.0/osquery-5.21.0_1.macos_arm64.tar.gz",
+      "archive_sha256": "c45e6a6dfe9ca9c5fc567b7224069060e7d1d02a257684667a23d40e9b01d8be",
+      "executable_sha256": "2cd76aed19a9fb0da18ee11f36272b9632c0dde71509b746f7142b31a703e9f5"
+    },
+    "mscp": {
+      "version": "tahoe_rev3",
+      "guidance_version": "Tahoe Guidance, Revision 3.0",
+      "commit": "beceac1d21baf9d924c2780f2e248577435bbfb1",
+      "platform": "macos-26",
+      "url": "https://github.com/usnistgov/macos_security/archive/refs/tags/tahoe_rev3.tar.gz",
+      "sha256": "2dcd1ff9c0f4353432b1b3a2b0cf7fb49a1574c9cf3e7240d3ed1f2f22bd9a61",
+      "baseline": "cis_lvl1"
+    },
+    "syft": {
+      "version": "1.50.0",
+      "commit": "16223e6dd7893fe578787658ceb876257483d404",
+      "platform": "darwin-arm64",
+      "archive": "syft_1.50.0_darwin_arm64.tar.gz",
+      "url": "https://github.com/anchore/syft/releases/download/v1.50.0/syft_1.50.0_darwin_arm64.tar.gz",
+      "archive_sha256": "e32fdb9d47823fa633748a1efca2528fd77c37469ea93c9e40ab835da44e4cce",
+      "executable_sha256": "5d59c9e6fa641793ddb48bc90b5b7ad63bf7303a52835b75b1beee3757463998"
+    },
+    "grype": {
+      "version": "0.116.1",
+      "commit": "30394f177175da63ae36b35cdd809c248eb4de7f",
+      "platform": "darwin-arm64",
+      "archive": "grype_0.116.1_darwin_arm64.tar.gz",
+      "url": "https://github.com/anchore/grype/releases/download/v0.116.1/grype_0.116.1_darwin_arm64.tar.gz",
+      "archive_sha256": "f493f169cbaae48bade169532b20235fc16653d2a044a5bc6fe6f69a3923f975",
+      "executable_sha256": "361b86bc5906fa38ad24cc8a0c2ce9128ac7d8931e82505236a8d0b16bbf2fbe"
+    }
+  }
+}
