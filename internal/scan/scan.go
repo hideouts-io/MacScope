@@ -15,6 +15,7 @@ import (
 
 	"macscope/internal/artifact"
 	"macscope/internal/cli"
+	"macscope/internal/eventstream"
 	"macscope/internal/model"
 	"macscope/internal/native"
 	osquerycollector "macscope/internal/osquery"
@@ -63,7 +64,10 @@ func (err RuntimeEvidenceError) Unwrap() error {
 	return err.Cause
 }
 
-func Run(command cli.ScanCommand, executable string, effectiveUID int, stdin io.Reader, stderr io.Writer, progressTracker progress.Tracker) (Result, error) {
+func Run(parentContext context.Context, command cli.ScanCommand, executable string, effectiveUID int, stdin io.Reader, stderr io.Writer, progressTracker progress.Tracker, eventEmitter eventstream.Emit) (Result, error) {
+	if parentContext == nil {
+		return Result{}, fmt.Errorf("configure scan: context must not be nil")
+	}
 	sofaClient, err := sofa.NewClient(sofa.ClientConfig{
 		Endpoint:         sofa.FeedURL,
 		UserAgent:        "MacScope/" + version.Current + " (SOFA v2 security posture integration)",
@@ -85,6 +89,7 @@ func Run(command cli.ScanCommand, executable string, effectiveUID int, stdin io.
 		ExpectedVersion: osquerycollector.ExpectedVersion,
 		ExpectedSHA256:  osquerycollector.ExpectedExecutableHash,
 		QueryTimeout:    30 * time.Second,
+		EventEmitter:    eventEmitter,
 	})
 	if err != nil {
 		return Result{}, fmt.Errorf("configure osquery client: %w", err)
@@ -106,18 +111,25 @@ func Run(command cli.ScanCommand, executable string, effectiveUID int, stdin io.
 		DatabaseTimeout:        10 * time.Minute,
 		DatabaseUpdateAttempts: 3,
 		DatabaseRetryDelays:    []time.Duration{time.Second, 2 * time.Second},
+		EventEmitter:           eventEmitter,
 	})
 	if err != nil {
 		return Result{}, fmt.Errorf("configure Syft and Grype client: %w", err)
 	}
-	return run(command, executable, effectiveUID, stdin, stderr, sofaClient, osqueryClient, supplyChainClient, progressTracker)
+	return run(parentContext, command, executable, effectiveUID, stdin, stderr, sofaClient, osqueryClient, supplyChainClient, progressTracker, eventEmitter)
 }
 
-func run(command cli.ScanCommand, executable string, effectiveUID int, stdin io.Reader, stderr io.Writer, sofaClient sofa.Client, osqueryClient osquerycollector.Client, supplyChainClient supplychain.Client, progressTracker progress.Tracker) (Result, error) {
+func run(parentContext context.Context, command cli.ScanCommand, executable string, effectiveUID int, stdin io.Reader, stderr io.Writer, sofaClient sofa.Client, osqueryClient osquerycollector.Client, supplyChainClient supplychain.Client, progressTracker progress.Tracker, eventEmitter eventstream.Emit) (Result, error) {
+	if parentContext == nil {
+		return Result{}, fmt.Errorf("configure scan: context must not be nil")
+	}
+	if err := checkContext(parentContext, "starting scan"); err != nil {
+		return Result{}, err
+	}
 	if effectiveUID == 0 {
 		return Result{}, ExecutionIdentityError{EffectiveUID: effectiveUID}
 	}
-	if err := reportProgress(progressTracker.Report, 2, "Validating scan settings and filesystem exclusions"); err != nil {
+	if err := reportProgress(progressTracker.Report, "macscope", 2, "Validating scan settings and filesystem exclusions"); err != nil {
 		return Result{}, err
 	}
 	if err := supplychain.ValidateExcludedPaths(command.ExcludedPaths); err != nil {
@@ -125,10 +137,13 @@ func run(command cli.ScanCommand, executable string, effectiveUID int, stdin io.
 	}
 
 	startedAt := time.Now().UTC()
-	if err := reportProgress(progressTracker.Report, 5, "Collecting macOS identity, security controls, and XProtect versions"); err != nil {
+	if err := reportProgress(progressTracker.Report, "macscope", 5, "Collecting macOS identity, security controls, and XProtect versions"); err != nil {
 		return Result{}, err
 	}
-	unprivilegedResults := native.CollectUnprivileged(context.Background())
+	unprivilegedResults := native.CollectUnprivileged(parentContext, eventEmitter)
+	if err := checkContext(parentContext, "collecting native macOS controls"); err != nil {
+		return Result{}, err
+	}
 	privilegedResults := make([]native.ProbeResult, 0)
 	privilegeEvidence := model.PrivilegeEvidence{
 		Requested:                command.PrivilegeRequested,
@@ -139,13 +154,13 @@ func run(command cli.ScanCommand, executable string, effectiveUID int, stdin io.
 	}
 
 	if command.PrivilegeRequested {
-		if err := reportProgress(progressTracker.Report, 15, "Waiting for sudo, then reading PF and Remote Login state"); err != nil {
+		if err := reportProgress(progressTracker.Report, "macscope", 15, "Waiting for sudo, then reading PF and Remote Login state"); err != nil {
 			return Result{}, err
 		}
 		if err := progressTracker.Suspend(); err != nil {
 			return Result{}, fmt.Errorf("suspend progress for sudo prompt: %w", err)
 		}
-		privilegedResult, privilegeErr := privilege.Collect(executable, effectiveUID, stdin, stderr)
+		privilegedResult, privilegeErr := privilege.Collect(parentContext, executable, effectiveUID, stdin, stderr, eventEmitter)
 		resumeErr := progressTracker.Resume()
 		if privilegeErr != nil {
 			if resumeErr != nil {
@@ -165,21 +180,24 @@ func run(command cli.ScanCommand, executable string, effectiveUID int, stdin io.
 		}
 		privilegedResults = append(privilegedResults, privilegedResult.NativeResults...)
 	} else {
-		if err := reportProgress(progressTracker.Report, 15, "Recording PF and Remote Login as not scanned; --privileged was not requested"); err != nil {
+		if err := reportProgress(progressTracker.Report, "macscope", 15, "Recording PF and Remote Login as not scanned; --privileged was not requested"); err != nil {
 			return Result{}, err
 		}
 	}
-	if err := reportProgress(progressTracker.Report, 22, "Validating native command evidence and control findings"); err != nil {
+	if err := reportProgress(progressTracker.Report, "macscope", 22, "Validating native command evidence and control findings"); err != nil {
 		return Result{}, err
 	}
 	nativeCollection, err := native.BuildCollection(unprivilegedResults, privilegedResults, command.PrivilegeRequested, time.Now().UTC())
 	if err != nil {
 		return Result{}, err
 	}
-	if err := reportProgress(progressTracker.Report, 28, "Fetching SOFA macOS CVE, KEV, release, and XProtect data"); err != nil {
+	if err := reportProgress(progressTracker.Report, "sofa", 28, "Fetching SOFA macOS CVE, KEV, release, and XProtect data"); err != nil {
 		return Result{}, err
 	}
-	sofaResponse, fetchErr := sofaClient.Fetch(context.Background(), progressTracker.Messages)
+	sofaResponse, fetchErr := sofaClient.Fetch(parentContext, progressTracker.Messages)
+	if err := checkContext(parentContext, "fetching SOFA security data"); err != nil {
+		return Result{}, err
+	}
 	var sofaCollection sofa.Collection
 	if fetchErr != nil {
 		sofaCollection = sofa.BuildFailure(sofaResponse, fetchErr)
@@ -195,18 +213,24 @@ func run(command cli.ScanCommand, executable string, effectiveUID int, stdin io.
 			sofaCollection = sofa.BuildFailure(sofaResponse, err)
 		}
 	}
-	if err := reportProgress(progressTracker.Report, 38, "Inventorying applications, persistence, listeners, and reviewed mSCP controls with osquery"); err != nil {
+	if err := reportProgress(progressTracker.Report, "osquery", 38, "Inventorying applications, persistence, listeners, and reviewed mSCP controls with osquery"); err != nil {
 		return Result{}, err
 	}
-	osqueryCollection, err := osquerycollector.Collect(context.Background(), osqueryClient, nativeCollection.HostDetails.MacOSVersion, time.Now().UTC())
+	osqueryCollection, err := osquerycollector.Collect(parentContext, osqueryClient, nativeCollection.HostDetails.MacOSVersion, time.Now().UTC())
 	if err != nil {
 		return Result{}, fmt.Errorf("collect osquery and mSCP evidence: %w", err)
 	}
-	supplyChainCollection, err := supplychain.Collect(context.Background(), supplyChainClient, nativeCollection.HostDetails.MacOSVersion, command.ExcludedPaths, progressTracker.Messages, time.Now().UTC(), progressTracker.Report)
+	if err := checkContext(parentContext, "collecting osquery inventory and compliance data"); err != nil {
+		return Result{}, err
+	}
+	supplyChainCollection, err := supplychain.Collect(parentContext, supplyChainClient, nativeCollection.HostDetails.MacOSVersion, command.ExcludedPaths, progressTracker.Messages, time.Now().UTC(), progressTracker.Report)
 	if err != nil {
 		return Result{}, fmt.Errorf("collect Syft and Grype evidence: %w", err)
 	}
-	if err := reportProgress(progressTracker.Report, 92, "Assembling provenance, coverage, evidence, and findings"); err != nil {
+	if err := checkContext(parentContext, "collecting Syft and Grype evidence"); err != nil {
+		return Result{}, err
+	}
+	if err := reportProgress(progressTracker.Report, "macscope", 92, "Assembling provenance, coverage, evidence, and findings"); err != nil {
 		return Result{}, err
 	}
 
@@ -280,22 +304,32 @@ func run(command cli.ScanCommand, executable string, effectiveUID int, stdin io.
 		Findings:    findings,
 	}
 
-	if err := reportProgress(progressTracker.Report, 97, "Validating hashes and writing scan.json with evidence artifacts"); err != nil {
+	if err := checkContext(parentContext, "assembling scan evidence"); err != nil {
+		return Result{}, err
+	}
+	if err := reportProgress(progressTracker.Report, "macscope", 97, "Validating hashes and writing scan.json with evidence artifacts"); err != nil {
 		return Result{}, err
 	}
 	reportPath, err := writeReport(command.OutputDirectory, run, artifacts)
 	if err != nil {
 		return Result{}, err
 	}
-	if err := reportProgress(progressTracker.Report, 100, "Scan complete; validated report and evidence written"); err != nil {
+	if err := reportProgress(progressTracker.Report, "macscope", 100, "Scan complete; validated report and evidence written"); err != nil {
 		return Result{}, err
 	}
 	return Result{ReportPath: reportPath}, nil
 }
 
-func reportProgress(reporter progress.Reporter, percent int, message string) error {
-	if err := reporter(progress.Event{Percent: percent, Message: message}); err != nil {
+func reportProgress(reporter progress.Reporter, collectorID string, percent int, message string) error {
+	if err := reporter(progress.Event{CollectorID: collectorID, Percent: percent, Message: message}); err != nil {
 		return fmt.Errorf("report scan progress at %d percent: %w", percent, err)
+	}
+	return nil
+}
+
+func checkContext(parentContext context.Context, operation string) error {
+	if err := parentContext.Err(); err != nil {
+		return fmt.Errorf("scan canceled while %s: %w", operation, err)
 	}
 	return nil
 }

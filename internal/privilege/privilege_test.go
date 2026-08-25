@@ -2,12 +2,15 @@ package privilege
 
 import (
 	"bytes"
+	"context"
 	"testing"
+
+	"macscope/internal/eventstream"
 )
 
 func TestWriteInternalResultRequiresRoot(t *testing.T) {
 	var output bytes.Buffer
-	err := WriteInternalResult(501, &output)
+	err := WriteInternalResult(context.Background(), 501, &output, eventstream.Disabled())
 	if err == nil {
 		t.Fatal("WriteInternalResult returned nil error, want AuthorizationError")
 	}
@@ -18,7 +21,7 @@ func TestWriteInternalResultRequiresRoot(t *testing.T) {
 
 func TestWriteAndDecodeInternalResult(t *testing.T) {
 	var output bytes.Buffer
-	if err := WriteInternalResult(0, &output); err != nil {
+	if err := WriteInternalResult(context.Background(), 0, &output, eventstream.Disabled()); err != nil {
 		t.Fatalf("WriteInternalResult returned an error: %v", err)
 	}
 

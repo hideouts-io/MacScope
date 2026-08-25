@@ -1,0 +1,371 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		2CFE368AAE76CC729D007221 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7BCE4F3149A1E6B31D41F4D0 /* RootView.swift */; };
+		38437A1D7F11FBFDD6A88495 /* ScanCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9FC22FC9A5C915D2A4786FBD /* ScanCoordinator.swift */; };
+		479374FEEA4DE361B6565D2C /* MacScopeApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEA3B9D8F41888F7620056FD /* MacScopeApp.swift */; };
+		55AFFA304FAA55AD31F67047 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 64D50560F529CF5EF8863003 /* Assets.xcassets */; };
+		67AC45C2E1139F0C48BB3953 /* Views.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7F8F00020B809688D0676A7 /* Views.swift */; };
+		7B4D8AAF2B7B5B00C4478A88 /* DesignSystem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 275096CE58679A1DE2DA8A57 /* DesignSystem.swift */; };
+		BDFBD205D905C0E53DA66536 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = BECD4F504AF0121EA1C54AFA /* Models.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		275096CE58679A1DE2DA8A57 /* DesignSystem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignSystem.swift; sourceTree = "<group>"; };
+		64D50560F529CF5EF8863003 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		7BCE4F3149A1E6B31D41F4D0 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
+		9FC22FC9A5C915D2A4786FBD /* ScanCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanCoordinator.swift; sourceTree = "<group>"; };
+		B7F8F00020B809688D0676A7 /* Views.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views.swift; sourceTree = "<group>"; };
+		BECD4F504AF0121EA1C54AFA /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
+		D59EFC7189DCA24A64F015AC /* MacScope.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MacScope.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		FEA3B9D8F41888F7620056FD /* MacScopeApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacScopeApp.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		0460A39BAFACDC2308D3D7AC /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				64D50560F529CF5EF8863003 /* Assets.xcassets */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+		5F5C5D30E72233B939DFF620 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				D59EFC7189DCA24A64F015AC /* MacScope.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		867D0D07CFDD204A8B35D46C /* Sources */ = {
+			isa = PBXGroup;
+			children = (
+				275096CE58679A1DE2DA8A57 /* DesignSystem.swift */,
+				FEA3B9D8F41888F7620056FD /* MacScopeApp.swift */,
+				BECD4F504AF0121EA1C54AFA /* Models.swift */,
+				7BCE4F3149A1E6B31D41F4D0 /* RootView.swift */,
+				9FC22FC9A5C915D2A4786FBD /* ScanCoordinator.swift */,
+				B7F8F00020B809688D0676A7 /* Views.swift */,
+			);
+			path = Sources;
+			sourceTree = "<group>";
+		};
+		EFC200F94FC6EBC338B4BFB6 = {
+			isa = PBXGroup;
+			children = (
+				0460A39BAFACDC2308D3D7AC /* Resources */,
+				867D0D07CFDD204A8B35D46C /* Sources */,
+				5F5C5D30E72233B939DFF620 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		64F52A56ADC959B32C811F4E /* MacScope */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 4E30D57D06409ECC08079FDC /* Build configuration list for PBXNativeTarget "MacScope" */;
+			buildPhases = (
+				E372E69CFFFF961DF71F93E6 /* Bundle MacScope scan engine */,
+				871636D2E539AE561F039A0F /* Sources */,
+				04B79A54C466914DFE10D9AC /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = MacScope;
+			packageProductDependencies = (
+			);
+			productName = MacScope;
+			productReference = D59EFC7189DCA24A64F015AC /* MacScope.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		8D7655FB0E0CF2B01BA6C389 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					64F52A56ADC959B32C811F4E = {
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = 7E8969EE840BF0B6A05F70D6 /* Build configuration list for PBXProject "MacScope" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = EFC200F94FC6EBC338B4BFB6;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 5F5C5D30E72233B939DFF620 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				64F52A56ADC959B32C811F4E /* MacScope */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		04B79A54C466914DFE10D9AC /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				55AFFA304FAA55AD31F67047 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		E372E69CFFFF961DF71F93E6 /* Bundle MacScope scan engine */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Bundle MacScope scan engine";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "set -euo pipefail\n\nREPOSITORY_ROOT=\"${SRCROOT}/..\"\nCONTENTS_ROOT=\"${BUILT_PRODUCTS_DIR}/${CONTENTS_FOLDER_PATH}\"\nHELPER_ROOT=\"${CONTENTS_ROOT}/Helpers\"\nTOOL_ROOT=\"${CONTENTS_ROOT}/.tools\"\nCONFIG_ROOT=\"${CONTENTS_ROOT}/config\"\nGO_BINARY=\"${REPOSITORY_ROOT}/.tools/go/bin/go\"\n\nrequired_files=(\n  \"${GO_BINARY}\"\n  \"${REPOSITORY_ROOT}/.tools/osquery/5.21.0/osqueryi\"\n  \"${REPOSITORY_ROOT}/.tools/syft/1.50.0/syft\"\n  \"${REPOSITORY_ROOT}/.tools/grype/0.116.1/grype\"\n  \"${REPOSITORY_ROOT}/config/syft.yaml\"\n  \"${REPOSITORY_ROOT}/config/grype.yaml\"\n)\nfor required_file in \"${required_files[@]}\"; do\n  if [[ ! -e \"${required_file}\" ]]; then\n    echo \"error: required MacScope component is missing: ${required_file}\" >&2\n    exit 1\n  fi\ndone\n\nmkdir -p \"${HELPER_ROOT}\" \"${TOOL_ROOT}/osquery/5.21.0\" \"${TOOL_ROOT}/syft/1.50.0\" \"${TOOL_ROOT}/grype/0.116.1\" \"${TOOL_ROOT}/grype/db\" \"${CONFIG_ROOT}\"\nGOCACHE=\"${PROJECT_TEMP_DIR}/macscope-go-cache\" \"${GO_BINARY}\" build -trimpath -o \"${HELPER_ROOT}/macscope\" \"${REPOSITORY_ROOT}/cmd/macscope\"\ncp -L \"${REPOSITORY_ROOT}/.tools/osquery/5.21.0/osqueryi\" \"${TOOL_ROOT}/osquery/5.21.0/osqueryi\"\ncp \"${REPOSITORY_ROOT}/.tools/syft/1.50.0/syft\" \"${TOOL_ROOT}/syft/1.50.0/syft\"\ncp \"${REPOSITORY_ROOT}/.tools/grype/0.116.1/grype\" \"${TOOL_ROOT}/grype/0.116.1/grype\"\ncp \"${REPOSITORY_ROOT}/config/syft.yaml\" \"${CONFIG_ROOT}/syft.yaml\"\ncp \"${REPOSITORY_ROOT}/config/grype.yaml\" \"${CONFIG_ROOT}/grype.yaml\"\nchmod 755 \"${HELPER_ROOT}/macscope\" \"${TOOL_ROOT}/osquery/5.21.0/osqueryi\" \"${TOOL_ROOT}/syft/1.50.0/syft\" \"${TOOL_ROOT}/grype/0.116.1/grype\"\n";
+		};
+/* End PBXShellScriptBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		871636D2E539AE561F039A0F /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				7B4D8AAF2B7B5B00C4478A88 /* DesignSystem.swift in Sources */,
+				479374FEEA4DE361B6565D2C /* MacScopeApp.swift in Sources */,
+				BDFBD205D905C0E53DA66536 /* Models.swift in Sources */,
+				2CFE368AAE76CC729D007221 /* RootView.swift in Sources */,
+				38437A1D7F11FBFDD6A88495 /* ScanCoordinator.swift in Sources */,
+				67AC45C2E1139F0C48BB3953 /* Views.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		81CE37DB5FBC01789CE4AEE8 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_STRICT_CONCURRENCY = minimal;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		83F6659F2DF2E49EDD82478A /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = MacScope;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
+				INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace = YES;
+				INFOPLIST_KEY_NSHighResolutionCapable = YES;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright 2026 MacScope contributors. Apache-2.0 licensed.";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 0.2.0;
+				PRODUCT_BUNDLE_IDENTIFIER = io.hideouts.MacScope;
+				PRODUCT_NAME = MacScope;
+				SDKROOT = macosx;
+			};
+			name = Release;
+		};
+		8797399FD6E31E6A4233A8EE /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = MacScope;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
+				INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace = YES;
+				INFOPLIST_KEY_NSHighResolutionCapable = YES;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright 2026 MacScope contributors. Apache-2.0 licensed.";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 0.2.0;
+				PRODUCT_BUNDLE_IDENTIFIER = io.hideouts.MacScope;
+				PRODUCT_NAME = MacScope;
+				SDKROOT = macosx;
+			};
+			name = Debug;
+		};
+		B7E8238AC8FA811F3F8FAA2F /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_STRICT_CONCURRENCY = minimal;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		4E30D57D06409ECC08079FDC /* Build configuration list for PBXNativeTarget "MacScope" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				8797399FD6E31E6A4233A8EE /* Debug */,
+				83F6659F2DF2E49EDD82478A /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		7E8969EE840BF0B6A05F70D6 /* Build configuration list for PBXProject "MacScope" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B7E8238AC8FA811F3F8FAA2F /* Debug */,
+				81CE37DB5FBC01789CE4AEE8 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 8D7655FB0E0CF2B01BA6C389 /* Project object */;
+}

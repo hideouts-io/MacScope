@@ -43,6 +43,7 @@
 - [Finding and Coverage Taxonomy](#finding-and-coverage-taxonomy)
 - [Network Use, Retries, and Timeouts](#network-use-retries-and-timeouts)
 - [Live Scan Progress](#live-scan-progress)
+- [Machine-Readable Event Stream](#machine-readable-event-stream)
 - [Interactive CLI Banner](#interactive-cli-banner)
 - [Errors and Failure Behavior](#errors-and-failure-behavior)
 - [Privacy and Evidence Handling](#privacy-and-evidence-handling)
@@ -329,7 +330,7 @@ MacScope verifies each third-party executable before collection and rehashes osq
 
 ```text
 Usage:
-  macscope scan --output <directory> [--privileged] [--exclude <absolute-path>]...
+  macscope scan --output <directory> [--privileged] [--events-json] [--exclude <absolute-path>]...
   macscope report --input <scan.json> --output <report.html>
   macscope version
   macscope help
@@ -800,6 +801,28 @@ Set `NO_COLOR=1` or `TERM=dumb` for plain milestone lines. Disable progress comp
 ```sh
 MACSCOPE_NO_PROGRESS=1 ./bin/macscope scan --output ./scan-results/example
 ```
+
+---
+
+## Machine-Readable Event Stream
+
+`--events-json` reserves stdout for a versioned newline-delimited JSON event stream intended for the native MacScope GUI and other integrations:
+
+```sh
+./bin/macscope scan \
+  --output ./scan-results/gui-run \
+  --events-json
+```
+
+The animated banner and terminal progress display are suppressed in this mode. Each stdout line is an independent JSON envelope with `schema_version`, monotonically increasing `sequence`, UTC `timestamp`, `type`, and one typed payload. Protocol events cover scan lifecycle, collector-aware progress, command lifecycle, exact output chunks, successful completion, failure, and cancellation:
+
+```json
+{"schema_version":"1","sequence":2,"timestamp":"2026-08-24T20:14:00Z","type":"progress","progress":{"collector_id":"syft","percent":55,"message":"Scanning readable system and home-directory packages with Syft; large scopes can take time"}}
+```
+
+Commands emit `command_started`, zero or more `command_output` records, and `command_completed`. Start records contain the executable, argument array, relevant environment overrides, and only the byte count and SHA-256 of standard input—not the input content. Output data is chunked at no more than 24 KiB and JSON-encoded in `data_base64`, so clients can reconstruct exact stdout and stderr bytes without assuming UTF-8. `may_contain_private_data` warns clients that paths, usernames, process arguments, or other host details may be present.
+
+The event stream is also sensitive local evidence. The native app preserves it as `events.ndjson` beside the scan output and retains only a bounded recent window in memory for the live display. Human-readable errors and retry warnings remain on stderr. A successful stream ends with `scan_completed` containing the validated `scan.json` path. A failed or canceled stream ends with `scan_failed`.
 
 ---
 

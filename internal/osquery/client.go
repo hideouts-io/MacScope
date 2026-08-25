@@ -11,6 +11,8 @@ import (
 	"os/exec"
 	"strings"
 	"time"
+
+	"macscope/internal/eventstream"
 )
 
 const (
@@ -25,6 +27,7 @@ type ClientConfig struct {
 	ExpectedVersion string
 	ExpectedSHA256  string
 	QueryTimeout    time.Duration
+	EventEmitter    eventstream.Emit
 }
 
 type Client struct {
@@ -123,24 +126,60 @@ func (client Client) execute(parentContext context.Context, identifier string, a
 	queryContext, cancel := context.WithTimeout(parentContext, client.config.QueryTimeout)
 	defer cancel()
 	startedAt := time.Now().UTC()
-	command := exec.CommandContext(queryContext, client.config.ExecutablePath, arguments...)
+	commandID := "osquery." + identifier
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
-	command.Stdout = &stdout
-	command.Stderr = &stderr
-	err := command.Run()
-	completedAt := time.Now().UTC()
-	exitCode := 0
 	executionError := ""
-	if err != nil {
-		executionError = err.Error()
+	exitCode := 0
+	startEventError := eventstream.Send(client.config.EventEmitter, eventstream.NewCommandStarted(
+		ToolID,
+		commandID,
+		client.config.ExecutablePath,
+		arguments,
+		make([]eventstream.EnvironmentVariable, 0),
+		"",
+		0,
+		true,
+	))
+	if startEventError != nil {
+		executionError = fmt.Sprintf("emit command start event: %v", startEventError)
 		exitCode = -1
-		var exitError *exec.ExitError
-		if errors.As(err, &exitError) {
-			exitCode = exitError.ExitCode()
+	} else {
+		command := exec.CommandContext(queryContext, client.config.ExecutablePath, arguments...)
+		stdoutWriter, writerErr := eventstream.NewCommandOutputWriter(&stdout, client.config.EventEmitter, ToolID, commandID, eventstream.OutputStreamStandardOutput, true)
+		if writerErr != nil {
+			executionError = writerErr.Error()
+			exitCode = -1
+		} else {
+			stderrWriter, writerErr := eventstream.NewCommandOutputWriter(&stderr, client.config.EventEmitter, ToolID, commandID, eventstream.OutputStreamStandardError, true)
+			if writerErr != nil {
+				executionError = writerErr.Error()
+				exitCode = -1
+			} else {
+				command.Stdout = stdoutWriter
+				command.Stderr = stderrWriter
+				runError := command.Run()
+				if runError != nil {
+					executionError = runError.Error()
+					exitCode = -1
+					var exitError *exec.ExitError
+					if errors.As(runError, &exitError) {
+						exitCode = exitError.ExitCode()
+					}
+					if errors.Is(queryContext.Err(), context.DeadlineExceeded) {
+						executionError = fmt.Sprintf("query timeout after %s: %v", client.config.QueryTimeout, queryContext.Err())
+					} else if queryContext.Err() != nil {
+						executionError = fmt.Sprintf("query canceled: %v", queryContext.Err())
+					}
+				}
+			}
 		}
-		if queryContext.Err() != nil {
-			executionError = fmt.Sprintf("query timeout after %s: %v", client.config.QueryTimeout, queryContext.Err())
+	}
+	completedAt := time.Now().UTC()
+	if startEventError == nil {
+		if eventErr := eventstream.Send(client.config.EventEmitter, eventstream.NewCommandCompleted(ToolID, commandID, exitCode, executionError)); eventErr != nil {
+			executionError = appendExecutionError(executionError, fmt.Sprintf("emit command completion event: %v", eventErr))
+			exitCode = -1
 		}
 	}
 	return QueryResult{
@@ -153,6 +192,13 @@ func (client Client) execute(parentContext context.Context, identifier string, a
 		StandardError:  append([]byte(nil), stderr.Bytes()...),
 		ExecutionError: executionError,
 	}
+}
+
+func appendExecutionError(existing string, addition string) string {
+	if existing == "" {
+		return addition
+	}
+	return existing + "; " + addition
 }
 
 func (client Client) ExecutablePath() string {

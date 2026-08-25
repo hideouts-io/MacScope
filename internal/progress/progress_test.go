@@ -9,7 +9,7 @@ import (
 )
 
 func TestFormatLineShowsBarPercentageMessageAndElapsedTime(t *testing.T) {
-	line, err := formatLine(Event{Percent: 50, Message: "Scanning installed software"}, 65*time.Second, 2, 10)
+	line, err := formatLine(Event{CollectorID: "syft", Percent: 50, Message: "Scanning installed software"}, 65*time.Second, 2, 10)
 	if err != nil {
 		t.Fatalf("formatLine returned an error: %v", err)
 	}
@@ -20,7 +20,7 @@ func TestFormatLineShowsBarPercentageMessageAndElapsedTime(t *testing.T) {
 }
 
 func TestFormatLineRejectsInvalidWidthAndElapsedTime(t *testing.T) {
-	event := Event{Percent: 50, Message: "Scanning installed software"}
+	event := Event{CollectorID: "syft", Percent: 50, Message: "Scanning installed software"}
 	if _, err := formatLine(event, time.Second, 0, 0); err == nil {
 		t.Fatal("formatLine accepted zero bar width")
 	}
@@ -36,7 +36,7 @@ func TestNewTerminalReportsMessagesAndCloses(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewTerminal returned an error: %v", err)
 	}
-	if err := tracker.Report(Event{Percent: 25, Message: "Collecting native controls"}); err != nil {
+	if err := tracker.Report(Event{CollectorID: "macscope", Percent: 25, Message: "Collecting native controls"}); err != nil {
 		t.Fatalf("Report returned an error: %v", err)
 	}
 	if _, err := fmt.Fprintln(tracker.Messages, `{"level":"warning"}`); err != nil {
@@ -63,7 +63,7 @@ func TestNewPlainWritesOneLinePerEventWithoutANSI(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewPlain returned an error: %v", err)
 	}
-	if err := tracker.Report(Event{Percent: 10, Message: "Preparing"}); err != nil {
+	if err := tracker.Report(Event{CollectorID: "macscope", Percent: 10, Message: "Preparing"}); err != nil {
 		t.Fatalf("Report returned an error: %v", err)
 	}
 	if strings.Contains(output.String(), "\x1b[") {
@@ -77,9 +77,10 @@ func TestNewPlainWritesOneLinePerEventWithoutANSI(t *testing.T) {
 func TestReporterRejectsInvalidEvents(t *testing.T) {
 	tracker := Disabled(&bytes.Buffer{})
 	for _, event := range []Event{
-		{Percent: -1, Message: "invalid"},
-		{Percent: 101, Message: "invalid"},
-		{Percent: 50, Message: " "},
+		{CollectorID: "", Percent: 50, Message: "invalid"},
+		{CollectorID: "macscope", Percent: -1, Message: "invalid"},
+		{CollectorID: "macscope", Percent: 101, Message: "invalid"},
+		{CollectorID: "macscope", Percent: 50, Message: " "},
 	} {
 		if err := tracker.Report(event); err == nil {
 			t.Fatalf("Report(%#v) returned nil error", event)

@@ -13,6 +13,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"macscope/internal/eventstream"
 )
 
 const (
@@ -45,6 +47,7 @@ type ClientConfig struct {
 	DatabaseTimeout        time.Duration
 	DatabaseUpdateAttempts int
 	DatabaseRetryDelays    []time.Duration
+	EventEmitter           eventstream.Emit
 }
 
 type Client struct {
@@ -173,7 +176,7 @@ func (client Client) VerifySyft(parentContext context.Context) (ExecutableVerifi
 		ExpectedSHA256:  client.config.SyftExpectedSHA256,
 		Timeout:         client.config.SyftTimeout,
 		VersionArgs:     []string{"version", "--output", "json"},
-	})
+	}, client.config.EventEmitter)
 }
 
 func (client Client) VerifyGrype(parentContext context.Context) (ExecutableVerification, error) {
@@ -185,7 +188,7 @@ func (client Client) VerifyGrype(parentContext context.Context) (ExecutableVerif
 		ExpectedSHA256:  client.config.GrypeExpectedSHA256,
 		Timeout:         client.config.GrypeTimeout,
 		VersionArgs:     []string{"version", "--output", "json"},
-	})
+	}, client.config.EventEmitter)
 }
 
 type executableSpec struct {
@@ -198,7 +201,7 @@ type executableSpec struct {
 	VersionArgs     []string
 }
 
-func verifyExecutable(parentContext context.Context, spec executableSpec) (ExecutableVerification, error) {
+func verifyExecutable(parentContext context.Context, spec executableSpec, eventEmitter eventstream.Emit) (ExecutableVerification, error) {
 	fileInfo, err := os.Stat(spec.Path)
 	if err != nil {
 		return ExecutableVerification{}, VerificationError{Tool: spec.ToolID, Path: spec.Path, Cause: fmt.Errorf("stat executable: %w", err)}
@@ -216,7 +219,7 @@ func verifyExecutable(parentContext context.Context, spec executableSpec) (Execu
 	if digest != spec.ExpectedSHA256 {
 		return ExecutableVerification{SHA256: digest}, VerificationError{Tool: spec.ToolID, Path: spec.Path, Cause: fmt.Errorf("SHA-256 mismatch: expected %s, calculated %s", spec.ExpectedSHA256, digest)}
 	}
-	result := execute(parentContext, spec.Path, spec.VersionArgs, nil, nil, spec.ToolID+"-version", spec.Timeout)
+	result := execute(parentContext, spec.Path, spec.VersionArgs, make([]EnvironmentSetting, 0), nil, spec.ToolID+"-version", spec.ToolID, spec.Timeout, eventEmitter)
 	verification := ExecutableVerification{SHA256: digest, Result: result}
 	if err := successfulCommand(result); err != nil {
 		return verification, VerificationError{Tool: spec.ToolID, Path: spec.Path, Cause: fmt.Errorf("version command failed: %w", err)}
@@ -261,22 +264,22 @@ func (client Client) RunSyft(parentContext context.Context, macOSVersion string,
 		"--source-version", macOSVersion,
 		"--output", "syft-json",
 	}
-	return execute(parentContext, client.config.SyftExecutablePath, arguments, nil, nil, "filesystem-sbom", client.config.SyftTimeout)
+	return execute(parentContext, client.config.SyftExecutablePath, arguments, make([]EnvironmentSetting, 0), nil, "filesystem-sbom", SyftToolID, client.config.SyftTimeout, client.config.EventEmitter)
 }
 
 func (client Client) RunGrypeDatabaseUpdate(parentContext context.Context, attempt int) CommandResult {
 	arguments := []string{"--config", client.config.GrypeConfigPath, "db", "update"}
-	return execute(parentContext, client.config.GrypeExecutablePath, arguments, grypeEnvironment(client.config.GrypeDatabaseDirectory), nil, fmt.Sprintf("db-update-attempt-%d", attempt), client.config.DatabaseTimeout)
+	return execute(parentContext, client.config.GrypeExecutablePath, arguments, grypeEnvironment(client.config.GrypeDatabaseDirectory), nil, fmt.Sprintf("db-update-attempt-%d", attempt), GrypeToolID, client.config.DatabaseTimeout, client.config.EventEmitter)
 }
 
 func (client Client) RunGrypeDatabaseStatus(parentContext context.Context) CommandResult {
 	arguments := []string{"--config", client.config.GrypeConfigPath, "db", "status", "--output", "json"}
-	return execute(parentContext, client.config.GrypeExecutablePath, arguments, grypeEnvironment(client.config.GrypeDatabaseDirectory), nil, "db-status", client.config.DatabaseTimeout)
+	return execute(parentContext, client.config.GrypeExecutablePath, arguments, grypeEnvironment(client.config.GrypeDatabaseDirectory), nil, "db-status", GrypeToolID, client.config.DatabaseTimeout, client.config.EventEmitter)
 }
 
 func (client Client) RunGrype(parentContext context.Context, syftSBOM []byte) CommandResult {
 	arguments := []string{"--config", client.config.GrypeConfigPath, "--output", "json", "--by-cve"}
-	return execute(parentContext, client.config.GrypeExecutablePath, arguments, grypeEnvironment(client.config.GrypeDatabaseDirectory), syftSBOM, "vulnerability-match", client.config.GrypeTimeout)
+	return execute(parentContext, client.config.GrypeExecutablePath, arguments, grypeEnvironment(client.config.GrypeDatabaseDirectory), syftSBOM, "vulnerability-match", GrypeToolID, client.config.GrypeTimeout, client.config.EventEmitter)
 }
 
 func (client Client) ValidateSyftDigest() error {
@@ -310,37 +313,73 @@ func grypeEnvironment(databaseDirectory string) []EnvironmentSetting {
 	}
 }
 
-func execute(parentContext context.Context, executablePath string, arguments []string, environment []EnvironmentSetting, standardInput []byte, identifier string, timeout time.Duration) CommandResult {
+func execute(parentContext context.Context, executablePath string, arguments []string, environment []EnvironmentSetting, standardInput []byte, identifier string, collectorID string, timeout time.Duration, eventEmitter eventstream.Emit) CommandResult {
 	commandContext, cancel := context.WithTimeout(parentContext, timeout)
 	defer cancel()
 	startedAt := time.Now().UTC()
-	command := exec.CommandContext(commandContext, executablePath, arguments...)
-	if standardInput != nil {
-		command.Stdin = bytes.NewReader(standardInput)
-	}
-	command.Env = commandEnvironment(environment)
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
-	command.Stdout = &stdout
-	command.Stderr = &stderr
-	err := command.Run()
-	completedAt := time.Now().UTC()
-	exitCode := 0
-	executionError := ""
-	if err != nil {
-		executionError = err.Error()
-		exitCode = -1
-		var exitError *exec.ExitError
-		if errors.As(err, &exitError) {
-			exitCode = exitError.ExitCode()
-		}
-		if commandContext.Err() != nil {
-			executionError = fmt.Sprintf("command timeout after %s: %v", timeout, commandContext.Err())
-		}
-	}
+	commandID := collectorID + "." + identifier
 	inputDigest := ""
 	if standardInput != nil {
 		inputDigest = fmt.Sprintf("%x", sha256.Sum256(standardInput))
+	}
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	exitCode := 0
+	executionError := ""
+	startEventError := eventstream.Send(eventEmitter, eventstream.NewCommandStarted(
+		collectorID,
+		commandID,
+		executablePath,
+		arguments,
+		eventEnvironment(environment),
+		inputDigest,
+		len(standardInput),
+		true,
+	))
+	if startEventError != nil {
+		executionError = fmt.Sprintf("emit command start event: %v", startEventError)
+		exitCode = -1
+	} else {
+		command := exec.CommandContext(commandContext, executablePath, arguments...)
+		if standardInput != nil {
+			command.Stdin = bytes.NewReader(standardInput)
+		}
+		command.Env = commandEnvironment(environment)
+		stdoutWriter, writerErr := eventstream.NewCommandOutputWriter(&stdout, eventEmitter, collectorID, commandID, eventstream.OutputStreamStandardOutput, true)
+		if writerErr != nil {
+			executionError = writerErr.Error()
+			exitCode = -1
+		} else {
+			stderrWriter, writerErr := eventstream.NewCommandOutputWriter(&stderr, eventEmitter, collectorID, commandID, eventstream.OutputStreamStandardError, true)
+			if writerErr != nil {
+				executionError = writerErr.Error()
+				exitCode = -1
+			} else {
+				command.Stdout = stdoutWriter
+				command.Stderr = stderrWriter
+				runError := command.Run()
+				if runError != nil {
+					executionError = runError.Error()
+					exitCode = -1
+					var exitError *exec.ExitError
+					if errors.As(runError, &exitError) {
+						exitCode = exitError.ExitCode()
+					}
+					if errors.Is(commandContext.Err(), context.DeadlineExceeded) {
+						executionError = fmt.Sprintf("command timeout after %s: %v", timeout, commandContext.Err())
+					} else if commandContext.Err() != nil {
+						executionError = fmt.Sprintf("command canceled: %v", commandContext.Err())
+					}
+				}
+			}
+		}
+	}
+	completedAt := time.Now().UTC()
+	if startEventError == nil {
+		if eventErr := eventstream.Send(eventEmitter, eventstream.NewCommandCompleted(collectorID, commandID, exitCode, executionError)); eventErr != nil {
+			executionError = combineExecutionError(executionError, fmt.Sprintf("emit command completion event: %v", eventErr))
+			exitCode = -1
+		}
 	}
 	return CommandResult{
 		ID:             identifier,
@@ -355,6 +394,21 @@ func execute(parentContext context.Context, executablePath string, arguments []s
 		StandardError:  append([]byte(nil), stderr.Bytes()...),
 		ExecutionError: executionError,
 	}
+}
+
+func eventEnvironment(settings []EnvironmentSetting) []eventstream.EnvironmentVariable {
+	variables := make([]eventstream.EnvironmentVariable, len(settings))
+	for index, setting := range settings {
+		variables[index] = eventstream.EnvironmentVariable{Name: setting.Name, Value: setting.Value}
+	}
+	return variables
+}
+
+func combineExecutionError(existing string, addition string) string {
+	if existing == "" {
+		return addition
+	}
+	return existing + "; " + addition
 }
 
 func commandEnvironment(settings []EnvironmentSetting) []string {

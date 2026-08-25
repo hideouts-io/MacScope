@@ -31,6 +31,16 @@ func TestParsePrivilegedScan(t *testing.T) {
 	}
 }
 
+func TestParseJSONEventScan(t *testing.T) {
+	command, err := Parse([]string{"scan", "--output", "/tmp/macscope-test", "--events-json"})
+	if err != nil {
+		t.Fatalf("Parse returned an error: %v", err)
+	}
+	if !command.Scan.EventsJSON {
+		t.Fatal("events JSON = false, want true")
+	}
+}
+
 func TestParseScanWithRepeatedExclusions(t *testing.T) {
 	command, err := Parse([]string{"scan", "--output", "/tmp/macscope-test", "--exclude", "/Users/example/Downloads", "--exclude", "/Users/example/example.zip"})
 	if err != nil {

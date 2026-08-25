@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"macscope/internal/artifact"
+	"macscope/internal/eventstream"
 	"macscope/internal/model"
 )
 
@@ -43,12 +44,12 @@ type commandArtifact struct {
 	ExecutionError string    `json:"execution_error,omitempty"`
 }
 
-func CollectUnprivileged(parentContext context.Context) []ProbeResult {
-	return collectProbes(parentContext, unprivilegedProbeSpecs())
+func CollectUnprivileged(parentContext context.Context, eventEmitter eventstream.Emit) []ProbeResult {
+	return collectProbes(parentContext, unprivilegedProbeSpecs(), eventEmitter)
 }
 
-func CollectPrivileged(parentContext context.Context) []ProbeResult {
-	return collectProbes(parentContext, privilegedProbeSpecs())
+func CollectPrivileged(parentContext context.Context, eventEmitter eventstream.Emit) []ProbeResult {
+	return collectProbes(parentContext, privilegedProbeSpecs(), eventEmitter)
 }
 
 func ValidatePrivilegedResults(results []ProbeResult) error {
@@ -99,10 +100,10 @@ func BuildCollection(unprivilegedResults []ProbeResult, privilegedResults []Prob
 	return collection, nil
 }
 
-func collectProbes(parentContext context.Context, specs []probeSpec) []ProbeResult {
+func collectProbes(parentContext context.Context, specs []probeSpec, eventEmitter eventstream.Emit) []ProbeResult {
 	results := make([]ProbeResult, 0, len(specs))
 	for _, spec := range specs {
-		results = append(results, runProbe(parentContext, spec))
+		results = append(results, runProbe(parentContext, spec, eventEmitter))
 	}
 	return results
 }

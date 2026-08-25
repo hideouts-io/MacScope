@@ -67,7 +67,7 @@ func Collect(parentContext context.Context, client Client, macOSVersion string, 
 		return Collection{}, fmt.Errorf("collect Syft and Grype evidence: macOS version must not be empty")
 	}
 	collection := emptyCollection()
-	if err := reportSupplyChainProgress(progressReporter, 46, "Verifying the pinned Syft executable, version, commit, and hash"); err != nil {
+	if err := reportSupplyChainProgress(progressReporter, SyftToolID, 46, "Verifying the pinned Syft executable, version, commit, and hash"); err != nil {
 		return Collection{}, err
 	}
 	syftVerification, syftVerificationErr := client.VerifySyft(parentContext)
@@ -85,7 +85,7 @@ func Collect(parentContext context.Context, client Client, macOSVersion string, 
 		return Collection{}, err
 	}
 
-	if err := reportSupplyChainProgress(progressReporter, 50, "Preparing startup-volume, home-directory, OneDrive, and local-iCloud scan scope"); err != nil {
+	if err := reportSupplyChainProgress(progressReporter, SyftToolID, 50, "Preparing startup-volume, home-directory, OneDrive, and local-iCloud scan scope"); err != nil {
 		return Collection{}, err
 	}
 	syftScope, err := client.PrepareSyftScope("/Users", excludedPaths)
@@ -93,7 +93,7 @@ func Collect(parentContext context.Context, client Client, macOSVersion string, 
 		return Collection{}, fmt.Errorf("prepare Syft home-directory and local-iCloud scope: %w", err)
 	}
 	collection = addSyftScopeEvidence(collection, syftScope, observedAt)
-	if err := reportSupplyChainProgress(progressReporter, 55, "Scanning readable system and home-directory packages with Syft; large scopes can take time"); err != nil {
+	if err := reportSupplyChainProgress(progressReporter, SyftToolID, 55, "Scanning readable system and home-directory packages with Syft; large scopes can take time"); err != nil {
 		return Collection{}, err
 	}
 	syftResult := client.RunSyft(parentContext, macOSVersion, syftScope)
@@ -111,7 +111,7 @@ func Collect(parentContext context.Context, client Client, macOSVersion string, 
 		return Collection{}, err
 	}
 
-	if err := reportSupplyChainProgress(progressReporter, 72, "Syft SBOM validated; verifying the pinned Grype executable"); err != nil {
+	if err := reportSupplyChainProgress(progressReporter, GrypeToolID, 72, "Syft SBOM validated; verifying the pinned Grype executable"); err != nil {
 		return Collection{}, err
 	}
 	grypeVerification, grypeVerificationErr := client.VerifyGrype(parentContext)
@@ -128,7 +128,7 @@ func Collect(parentContext context.Context, client Client, macOSVersion string, 
 		return Collection{}, err
 	}
 
-	if err := reportSupplyChainProgress(progressReporter, 76, "Updating the project-local Grype vulnerability database"); err != nil {
+	if err := reportSupplyChainProgress(progressReporter, GrypeToolID, 76, "Updating the project-local Grype vulnerability database"); err != nil {
 		return Collection{}, err
 	}
 	var updateErr error
@@ -139,7 +139,7 @@ func Collect(parentContext context.Context, client Client, macOSVersion string, 
 		return collection, nil
 	}
 
-	if err := reportSupplyChainProgress(progressReporter, 81, "Validating Grype database schema, age, source, and digest"); err != nil {
+	if err := reportSupplyChainProgress(progressReporter, GrypeToolID, 81, "Validating Grype database schema, age, source, and digest"); err != nil {
 		return Collection{}, err
 	}
 	statusResult := client.RunGrypeDatabaseStatus(parentContext)
@@ -155,7 +155,7 @@ func Collect(parentContext context.Context, client Client, macOSVersion string, 
 	}
 	collection.Tools = addDatabaseIdentity(collection.Tools, database)
 
-	if err := reportSupplyChainProgress(progressReporter, 85, "Matching the validated Syft SBOM against the Grype database"); err != nil {
+	if err := reportSupplyChainProgress(progressReporter, GrypeToolID, 85, "Matching the validated Syft SBOM against the Grype database"); err != nil {
 		return Collection{}, err
 	}
 	grypeResult := client.RunGrype(parentContext, syftResult.StandardOutput)
@@ -194,8 +194,8 @@ func Collect(parentContext context.Context, client Client, macOSVersion string, 
 	return collection, nil
 }
 
-func reportSupplyChainProgress(reporter progress.Reporter, percent int, message string) error {
-	if err := reporter(progress.Event{Percent: percent, Message: message}); err != nil {
+func reportSupplyChainProgress(reporter progress.Reporter, collectorID string, percent int, message string) error {
+	if err := reporter(progress.Event{CollectorID: collectorID, Percent: percent, Message: message}); err != nil {
 		return fmt.Errorf("report supply-chain progress at %d percent: %w", percent, err)
 	}
 	return nil

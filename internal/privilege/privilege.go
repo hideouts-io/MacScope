@@ -4,10 +4,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os/exec"
 
+	"macscope/internal/eventstream"
 	"macscope/internal/native"
 )
 
@@ -42,19 +44,48 @@ func (err ProtocolError) Error() string {
 	return err.Message
 }
 
-func Collect(executable string, effectiveUID int, stdin io.Reader, stderr io.Writer) (Result, error) {
+func Collect(parentContext context.Context, executable string, effectiveUID int, stdin io.Reader, stderr io.Writer, eventEmitter eventstream.Emit) (Result, error) {
+	if parentContext == nil {
+		return Result{}, AuthorizationError{Executable: executable, Cause: fmt.Errorf("context must not be nil")}
+	}
 	if effectiveUID == 0 {
-		return newResult(effectiveUID, native.CollectPrivileged(context.Background())), nil
+		return newResult(effectiveUID, native.CollectPrivileged(parentContext, eventEmitter)), nil
 	}
 
-	command := exec.Command("/usr/bin/sudo", "--", executable, "internal-collect-privileged")
+	commandID := "privilege.native-read-only"
+	arguments := []string{"--", executable, "internal-collect-privileged"}
+	if err := eventstream.Send(eventEmitter, eventstream.NewCommandStarted("macscope", commandID, "/usr/bin/sudo", arguments, make([]eventstream.EnvironmentVariable, 0), "", 0, true)); err != nil {
+		return Result{}, AuthorizationError{Executable: executable, Cause: fmt.Errorf("emit sudo command start: %w", err)}
+	}
+	command := exec.CommandContext(parentContext, "/usr/bin/sudo", "--", executable, "internal-collect-privileged")
 	command.Stdin = stdin
-	command.Stderr = stderr
-
 	var output bytes.Buffer
-	command.Stdout = &output
-	if err := command.Run(); err != nil {
+	stdoutWriter, err := eventstream.NewCommandOutputWriter(&output, eventEmitter, "macscope", commandID, eventstream.OutputStreamStandardOutput, true)
+	if err != nil {
 		return Result{}, AuthorizationError{Executable: executable, Cause: err}
+	}
+	stderrEventWriter, err := eventstream.NewCommandOutputWriter(io.Discard, eventEmitter, "macscope", commandID, eventstream.OutputStreamStandardError, true)
+	if err != nil {
+		return Result{}, AuthorizationError{Executable: executable, Cause: err}
+	}
+	command.Stdout = stdoutWriter
+	command.Stderr = io.MultiWriter(stderr, stderrEventWriter)
+	runError := command.Run()
+	exitCode := 0
+	executionError := ""
+	if runError != nil {
+		exitCode = -1
+		executionError = runError.Error()
+		var exitError *exec.ExitError
+		if errors.As(runError, &exitError) {
+			exitCode = exitError.ExitCode()
+		}
+	}
+	if eventErr := eventstream.Send(eventEmitter, eventstream.NewCommandCompleted("macscope", commandID, exitCode, executionError)); eventErr != nil {
+		runError = errors.Join(runError, fmt.Errorf("emit sudo command completion: %w", eventErr))
+	}
+	if runError != nil {
+		return Result{}, AuthorizationError{Executable: executable, Cause: runError}
 	}
 
 	result, err := decodeResult(output.Bytes())
@@ -64,7 +95,10 @@ func Collect(executable string, effectiveUID int, stdin io.Reader, stderr io.Wri
 	return result, nil
 }
 
-func WriteInternalResult(effectiveUID int, output io.Writer) error {
+func WriteInternalResult(parentContext context.Context, effectiveUID int, output io.Writer, eventEmitter eventstream.Emit) error {
+	if parentContext == nil {
+		return AuthorizationError{Executable: "internal-collect-privileged", Cause: fmt.Errorf("context must not be nil")}
+	}
 	if effectiveUID != 0 {
 		return AuthorizationError{
 			Executable: "internal-collect-privileged",
@@ -74,7 +108,7 @@ func WriteInternalResult(effectiveUID int, output io.Writer) error {
 
 	encoder := json.NewEncoder(output)
 	encoder.SetEscapeHTML(false)
-	result := newResult(effectiveUID, native.CollectPrivileged(context.Background()))
+	result := newResult(effectiveUID, native.CollectPrivileged(parentContext, eventEmitter))
 	if err := encoder.Encode(result); err != nil {
 		return ProtocolError{Message: fmt.Sprintf("encode privileged collector result: %v", err)}
 	}

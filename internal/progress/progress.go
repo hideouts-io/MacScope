@@ -17,8 +17,9 @@ const (
 )
 
 type Event struct {
-	Percent int
-	Message string
+	CollectorID string
+	Percent     int
+	Message     string
 }
 
 type Reporter func(Event) error
@@ -234,6 +235,9 @@ func formatLine(event Event, elapsed time.Duration, spinnerIndex int, width int)
 }
 
 func validateEvent(event Event) error {
+	if strings.TrimSpace(event.CollectorID) == "" {
+		return fmt.Errorf("validate scan progress event: collector ID must not be empty")
+	}
 	if event.Percent < 0 || event.Percent > 100 {
 		return fmt.Errorf("validate scan progress event: percent %d is outside 0 through 100", event.Percent)
 	}

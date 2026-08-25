@@ -1,7 +1,9 @@
 package scan
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -12,6 +14,7 @@ import (
 	"time"
 
 	"macscope/internal/cli"
+	"macscope/internal/eventstream"
 	"macscope/internal/model"
 	osquerycollector "macscope/internal/osquery"
 	"macscope/internal/progress"
@@ -40,7 +43,7 @@ func TestRunWritesUnprivilegedSchemaValidatedReport(t *testing.T) {
 		events = append(events, event)
 		return nil
 	}
-	result, err := run(command, executable, 501, strings.NewReader(""), os.Stderr, sofaClient, osqueryClient, supplyChainClient, progressTracker)
+	result, err := run(context.Background(), command, executable, 501, strings.NewReader(""), os.Stderr, sofaClient, osqueryClient, supplyChainClient, progressTracker, eventstream.Disabled())
 	if err != nil {
 		t.Fatalf("Run returned an error: %v", err)
 	}
@@ -72,6 +75,9 @@ func TestRunWritesUnprivilegedSchemaValidatedReport(t *testing.T) {
 	if len(events) == 0 || events[0].Percent != 2 || events[len(events)-1].Percent != 100 {
 		t.Fatalf("progress events = %#v, want scan milestones from 2 through 100 percent", events)
 	}
+	if events[0].CollectorID != "macscope" {
+		t.Fatalf("first progress collector = %q, want macscope", events[0].CollectorID)
+	}
 }
 
 func TestRunDoesNotOverwriteExistingEvidence(t *testing.T) {
@@ -93,7 +99,7 @@ func TestRunDoesNotOverwriteExistingEvidence(t *testing.T) {
 	defer closeServer()
 	osqueryClient := unavailableOsqueryClient(t)
 	supplyChainClient := unavailableSupplyChainClient(t)
-	_, err = run(command, executable, 501, strings.NewReader(""), os.Stderr, sofaClient, osqueryClient, supplyChainClient, progress.Disabled(os.Stderr))
+	_, err = run(context.Background(), command, executable, 501, strings.NewReader(""), os.Stderr, sofaClient, osqueryClient, supplyChainClient, progress.Disabled(os.Stderr), eventstream.Disabled())
 	if err == nil {
 		t.Fatal("Run returned nil error, want OutputError")
 	}
@@ -135,6 +141,7 @@ func unavailableOsqueryClient(t *testing.T) osquerycollector.Client {
 		ExpectedVersion: osquerycollector.ExpectedVersion,
 		ExpectedSHA256:  osquerycollector.ExpectedExecutableHash,
 		QueryTimeout:    time.Second,
+		EventEmitter:    eventstream.Disabled(),
 	})
 	if err != nil {
 		t.Fatalf("configure unavailable test osquery client: %v", err)
@@ -162,6 +169,7 @@ func unavailableSupplyChainClient(t *testing.T) supplychain.Client {
 		DatabaseTimeout:        time.Second,
 		DatabaseUpdateAttempts: 1,
 		DatabaseRetryDelays:    make([]time.Duration, 0),
+		EventEmitter:           eventstream.Disabled(),
 	})
 	if err != nil {
 		t.Fatalf("configure unavailable supply-chain client: %v", err)
@@ -184,7 +192,7 @@ func TestRunRejectsRootOrchestrator(t *testing.T) {
 		PrivilegeRequested: true,
 	}
 
-	_, err := Run(command, "/tmp/macscope", 0, strings.NewReader(""), os.Stderr, progress.Disabled(os.Stderr))
+	_, err := Run(context.Background(), command, "/tmp/macscope", 0, strings.NewReader(""), os.Stderr, progress.Disabled(os.Stderr), eventstream.Disabled())
 	if err == nil {
 		t.Fatal("Run returned nil error, want ExecutionIdentityError")
 	}
@@ -201,9 +209,24 @@ func TestRunRejectsInvalidExclusionBeforeCollection(t *testing.T) {
 	}
 	sofaClient, closeServer := invalidFeedSOFAClient(t)
 	defer closeServer()
-	_, err := run(command, "/tmp/macscope", 501, strings.NewReader(""), os.Stderr, sofaClient, unavailableOsqueryClient(t), unavailableSupplyChainClient(t), progress.Disabled(os.Stderr))
+	_, err := run(context.Background(), command, "/tmp/macscope", 501, strings.NewReader(""), os.Stderr, sofaClient, unavailableOsqueryClient(t), unavailableSupplyChainClient(t), progress.Disabled(os.Stderr), eventstream.Disabled())
 	if err == nil || !strings.Contains(err.Error(), "path must be absolute") {
 		t.Fatalf("run error = %v, want absolute exclusion path validation error", err)
+	}
+}
+
+func TestRunRejectsCanceledContextBeforeCollection(t *testing.T) {
+	parentContext, cancel := context.WithCancel(context.Background())
+	cancel()
+	command := cli.ScanCommand{
+		OutputDirectory:    t.TempDir(),
+		PrivilegeRequested: false,
+	}
+	sofaClient, closeServer := invalidFeedSOFAClient(t)
+	defer closeServer()
+	_, err := run(parentContext, command, "/tmp/macscope", 501, strings.NewReader(""), os.Stderr, sofaClient, unavailableOsqueryClient(t), unavailableSupplyChainClient(t), progress.Disabled(os.Stderr), eventstream.Disabled())
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("run error = %v, want context.Canceled", err)
 	}
 }
 

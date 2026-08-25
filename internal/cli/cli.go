@@ -22,6 +22,7 @@ type ScanCommand struct {
 	OutputDirectory    string
 	PrivilegeRequested bool
 	ExcludedPaths      []string
+	EventsJSON         bool
 }
 
 type ReportCommand struct {
@@ -120,6 +121,7 @@ func parseScan(arguments []string) (Command, error) {
 	flags.SetOutput(io.Discard)
 	outputDirectory := flags.String("output", "", "directory for scan artifacts")
 	privilegeRequested := flags.Bool("privileged", false, "run narrow read-only collectors through sudo")
+	eventsJSON := flags.Bool("events-json", false, "write versioned NDJSON scan events to stdout")
 	excludedPaths := make(repeatedStringFlag, 0)
 	flags.Var(&excludedPaths, "exclude", "absolute file or directory to exclude from Syft; repeat for multiple paths")
 
@@ -139,12 +141,13 @@ func parseScan(arguments []string) (Command, error) {
 			OutputDirectory:    *outputDirectory,
 			PrivilegeRequested: *privilegeRequested,
 			ExcludedPaths:      append([]string(nil), excludedPaths...),
+			EventsJSON:         *eventsJSON,
 		},
 	}, nil
 }
 
 func Usage() string {
-	return "Usage:\n  macscope scan --output <directory> [--privileged] [--exclude <absolute-path>]...\n  macscope report --input <scan.json> --output <report.html>\n  macscope version\n  macscope help"
+	return "Usage:\n  macscope scan --output <directory> [--privileged] [--events-json] [--exclude <absolute-path>]...\n  macscope report --input <scan.json> --output <report.html>\n  macscope version\n  macscope help"
 }
 
 func IsUsageError(err error) bool {

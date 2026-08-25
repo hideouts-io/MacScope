@@ -9,6 +9,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"macscope/internal/eventstream"
 	"macscope/internal/model"
 )
 
@@ -50,18 +51,40 @@ func (err ProbeExecutionError) Error() string {
 	return fmt.Sprintf("native probe %q failed: %s", err.ProbeID, err.Message)
 }
 
-func runProbe(parentContext context.Context, spec probeSpec) ProbeResult {
+func runProbe(parentContext context.Context, spec probeSpec, eventEmitter eventstream.Emit) ProbeResult {
 	probeContext, cancel := context.WithTimeout(parentContext, probeTimeout)
 	defer cancel()
 
 	startedAt := time.Now().UTC()
-	command := exec.CommandContext(probeContext, spec.Executable, spec.Arguments...)
+	commandID := "native." + spec.ID
 	var standardOutput bytes.Buffer
 	var standardError bytes.Buffer
-	command.Stdout = &standardOutput
-	command.Stderr = &standardError
-
-	runError := command.Run()
+	runError := eventstream.Send(eventEmitter, eventstream.NewCommandStarted(
+		"macscope",
+		commandID,
+		spec.Executable,
+		spec.Arguments,
+		make([]eventstream.EnvironmentVariable, 0),
+		"",
+		0,
+		true,
+	))
+	if runError == nil {
+		command := exec.CommandContext(probeContext, spec.Executable, spec.Arguments...)
+		standardOutputWriter, writerErr := eventstream.NewCommandOutputWriter(&standardOutput, eventEmitter, "macscope", commandID, eventstream.OutputStreamStandardOutput, true)
+		if writerErr != nil {
+			runError = writerErr
+		} else {
+			standardErrorWriter, writerErr := eventstream.NewCommandOutputWriter(&standardError, eventEmitter, "macscope", commandID, eventstream.OutputStreamStandardError, true)
+			if writerErr != nil {
+				runError = writerErr
+			} else {
+				command.Stdout = standardOutputWriter
+				command.Stderr = standardErrorWriter
+				runError = command.Run()
+			}
+		}
+	}
 	completedAt := time.Now().UTC()
 	exitCode := 0
 	executionError := ""
@@ -75,6 +98,10 @@ func runProbe(parentContext context.Context, spec probeSpec) ProbeResult {
 	}
 	if probeContext.Err() != nil {
 		executionError = fmt.Sprintf("probe exceeded timeout %s: %v", probeTimeout, probeContext.Err())
+	}
+	if completedEventError := eventstream.Send(eventEmitter, eventstream.NewCommandCompleted("macscope", commandID, exitCode, executionError)); completedEventError != nil {
+		executionError = appendExecutionError(executionError, fmt.Sprintf("emit command completion event: %v", completedEventError))
+		exitCode = -1
 	}
 
 	stdoutBytes := standardOutput.Bytes()
