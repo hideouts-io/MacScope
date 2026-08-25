@@ -88,7 +88,7 @@ func Collect(parentContext context.Context, client Client, macOSVersion string, 
 	if err := reportSupplyChainProgress(progressReporter, SyftToolID, 50, "Preparing startup-volume, home-directory, OneDrive, and local-iCloud scan scope"); err != nil {
 		return Collection{}, err
 	}
-	syftScope, err := client.PrepareSyftScope("/Users", excludedPaths)
+	syftScope, err := client.PrepareSyftScope(parentContext, "/Users", excludedPaths)
 	if err != nil {
 		return Collection{}, fmt.Errorf("prepare Syft home-directory and local-iCloud scope: %w", err)
 	}

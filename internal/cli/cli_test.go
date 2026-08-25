@@ -41,6 +41,16 @@ func TestParseJSONEventScan(t *testing.T) {
 	}
 }
 
+func TestParseScanWithWritableDataDirectory(t *testing.T) {
+	command, err := Parse([]string{"scan", "--output", "/tmp/macscope-test", "--data-directory", "/tmp/macscope-data"})
+	if err != nil {
+		t.Fatalf("Parse returned an error: %v", err)
+	}
+	if command.Scan.DataDirectory != "/tmp/macscope-data" {
+		t.Fatalf("data directory = %q, want /tmp/macscope-data", command.Scan.DataDirectory)
+	}
+}
+
 func TestParseScanWithRepeatedExclusions(t *testing.T) {
 	command, err := Parse([]string{"scan", "--output", "/tmp/macscope-test", "--exclude", "/Users/example/Downloads", "--exclude", "/Users/example/example.zip"})
 	if err != nil {

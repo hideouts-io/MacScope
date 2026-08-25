@@ -1,6 +1,7 @@
 package supplychain
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/json"
 	"errors"
@@ -32,12 +33,18 @@ type userPathExclusion struct {
 	IsDirectory bool
 }
 
-func (client Client) PrepareSyftScope(usersRoot string, excludedPaths []string) (SyftScope, error) {
+func (client Client) PrepareSyftScope(parentContext context.Context, usersRoot string, excludedPaths []string) (SyftScope, error) {
+	if parentContext == nil {
+		return SyftScope{}, fmt.Errorf("prepare Syft scope: context must not be nil")
+	}
+	if err := contextError(parentContext, "before reading configuration"); err != nil {
+		return SyftScope{}, err
+	}
 	baseConfig, err := os.ReadFile(client.config.SyftConfigPath)
 	if err != nil {
 		return SyftScope{}, fmt.Errorf("read fixed Syft configuration %q: %w", client.config.SyftConfigPath, err)
 	}
-	dataless, err := discoverDatalessICloudPaths(usersRoot)
+	dataless, err := discoverDatalessICloudPaths(parentContext, usersRoot)
 	if err != nil {
 		return SyftScope{}, err
 	}
@@ -54,8 +61,7 @@ func (client Client) PrepareSyftScope(usersRoot string, excludedPaths []string) 
 	if err != nil {
 		return SyftScope{}, err
 	}
-	runtimeDirectory := filepath.Join(filepath.Dir(client.config.SyftExecutablePath), "runtime")
-	runtimePath, err := preserveRuntimeConfig(runtimeDirectory, runtimeConfig)
+	runtimePath, err := preserveRuntimeConfig(client.config.SyftRuntimeDirectory, runtimeConfig)
 	if err != nil {
 		return SyftScope{}, err
 	}
@@ -100,13 +106,19 @@ func ValidateExcludedPaths(paths []string) error {
 	return err
 }
 
-func discoverDatalessICloudPaths(usersRoot string) ([]datalessPath, error) {
+func discoverDatalessICloudPaths(parentContext context.Context, usersRoot string) ([]datalessPath, error) {
+	if err := contextError(parentContext, "before enumerating user homes"); err != nil {
+		return nil, err
+	}
 	homes, err := os.ReadDir(usersRoot)
 	if err != nil {
 		return nil, fmt.Errorf("enumerate user homes under %q: %w", usersRoot, err)
 	}
 	dataless := make([]datalessPath, 0)
 	for _, home := range homes {
+		if err := contextError(parentContext, "while enumerating user homes"); err != nil {
+			return nil, err
+		}
 		if !home.IsDir() {
 			continue
 		}
@@ -118,7 +130,7 @@ func discoverDatalessICloudPaths(usersRoot string) ([]datalessPath, error) {
 		if err != nil {
 			return nil, fmt.Errorf("inspect iCloud container root %q: %w", iCloudRoot, err)
 		}
-		paths, err := walkDatalessPaths(iCloudRoot)
+		paths, err := walkDatalessPaths(parentContext, iCloudRoot)
 		if err != nil {
 			return nil, err
 		}
@@ -130,9 +142,12 @@ func discoverDatalessICloudPaths(usersRoot string) ([]datalessPath, error) {
 	return dataless, nil
 }
 
-func walkDatalessPaths(root string) ([]datalessPath, error) {
+func walkDatalessPaths(parentContext context.Context, root string) ([]datalessPath, error) {
 	result := make([]datalessPath, 0)
 	err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, walkErr error) error {
+		if err := contextError(parentContext, "while inspecting local iCloud metadata"); err != nil {
+			return err
+		}
 		if walkErr != nil {
 			return fmt.Errorf("walk iCloud path %q: %w", path, walkErr)
 		}
@@ -157,6 +172,18 @@ func walkDatalessPaths(root string) ([]datalessPath, error) {
 		return nil, err
 	}
 	return result, nil
+}
+
+func contextError(parentContext context.Context, operation string) error {
+	if parentContext == nil {
+		return fmt.Errorf("%s: context must not be nil", operation)
+	}
+	select {
+	case <-parentContext.Done():
+		return fmt.Errorf("%s: %w", operation, parentContext.Err())
+	default:
+		return nil
+	}
 }
 
 func syftExclusions(projectRoot string, dataless []datalessPath, userExclusions []userPathExclusion) ([]string, error) {

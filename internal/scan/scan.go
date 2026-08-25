@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"macscope/internal/artifact"
+	"macscope/internal/catalog"
 	"macscope/internal/cli"
 	"macscope/internal/eventstream"
 	"macscope/internal/model"
@@ -64,7 +65,7 @@ func (err RuntimeEvidenceError) Unwrap() error {
 	return err.Cause
 }
 
-func Run(parentContext context.Context, command cli.ScanCommand, executable string, effectiveUID int, stdin io.Reader, stderr io.Writer, progressTracker progress.Tracker, eventEmitter eventstream.Emit) (Result, error) {
+func Run(parentContext context.Context, command cli.ScanCommand, executable string, configuredRuntimeRoot string, effectiveUID int, stdin io.Reader, stderr io.Writer, progressTracker progress.Tracker, eventEmitter eventstream.Emit) (Result, error) {
 	if parentContext == nil {
 		return Result{}, fmt.Errorf("configure scan: context must not be nil")
 	}
@@ -83,9 +84,16 @@ func Run(parentContext context.Context, command cli.ScanCommand, executable stri
 	if err != nil {
 		return Result{}, RuntimeEvidenceError{Operation: "resolving executable path for project tools", Cause: err}
 	}
-	projectRoot := filepath.Dir(filepath.Dir(absoluteExecutable))
+	runtimeRoot, err := resolveRuntimeRoot(configuredRuntimeRoot, absoluteExecutable)
+	if err != nil {
+		return Result{}, err
+	}
+	dataDirectory, err := resolveDataDirectory(command.DataDirectory, runtimeRoot)
+	if err != nil {
+		return Result{}, err
+	}
 	osqueryClient, err := osquerycollector.NewClient(osquerycollector.ClientConfig{
-		ExecutablePath:  filepath.Join(projectRoot, ".tools", "osquery", osquerycollector.ExpectedVersion, "osqueryi"),
+		ExecutablePath:  filepath.Join(runtimeRoot, ".tools", "osquery", osquerycollector.ExpectedVersion, "osqueryi"),
 		ExpectedVersion: osquerycollector.ExpectedVersion,
 		ExpectedSHA256:  osquerycollector.ExpectedExecutableHash,
 		QueryTimeout:    30 * time.Second,
@@ -95,17 +103,18 @@ func Run(parentContext context.Context, command cli.ScanCommand, executable stri
 		return Result{}, fmt.Errorf("configure osquery client: %w", err)
 	}
 	supplyChainClient, err := supplychain.NewClient(supplychain.ClientConfig{
-		SyftExecutablePath:     filepath.Join(projectRoot, ".tools", "syft", supplychain.SyftExpectedVersion, "syft"),
+		SyftExecutablePath:     filepath.Join(runtimeRoot, ".tools", "syft", supplychain.SyftExpectedVersion, "syft"),
 		SyftExpectedVersion:    supplychain.SyftExpectedVersion,
 		SyftExpectedCommit:     supplychain.SyftExpectedCommit,
 		SyftExpectedSHA256:     supplychain.SyftExpectedExecutableHash,
-		SyftConfigPath:         filepath.Join(projectRoot, "config", "syft.yaml"),
-		GrypeExecutablePath:    filepath.Join(projectRoot, ".tools", "grype", supplychain.GrypeExpectedVersion, "grype"),
+		SyftConfigPath:         filepath.Join(runtimeRoot, "config", "syft.yaml"),
+		SyftRuntimeDirectory:   filepath.Join(dataDirectory, "syft", "runtime"),
+		GrypeExecutablePath:    filepath.Join(runtimeRoot, ".tools", "grype", supplychain.GrypeExpectedVersion, "grype"),
 		GrypeExpectedVersion:   supplychain.GrypeExpectedVersion,
 		GrypeExpectedCommit:    supplychain.GrypeExpectedCommit,
 		GrypeExpectedSHA256:    supplychain.GrypeExpectedExecutableHash,
-		GrypeConfigPath:        filepath.Join(projectRoot, "config", "grype.yaml"),
-		GrypeDatabaseDirectory: filepath.Join(projectRoot, ".tools", "grype", "db"),
+		GrypeConfigPath:        filepath.Join(runtimeRoot, "config", "grype.yaml"),
+		GrypeDatabaseDirectory: filepath.Join(dataDirectory, "grype", "db"),
 		SyftTimeout:            30 * time.Minute,
 		GrypeTimeout:           10 * time.Minute,
 		DatabaseTimeout:        10 * time.Minute,
@@ -117,6 +126,48 @@ func Run(parentContext context.Context, command cli.ScanCommand, executable stri
 		return Result{}, fmt.Errorf("configure Syft and Grype client: %w", err)
 	}
 	return run(parentContext, command, executable, effectiveUID, stdin, stderr, sofaClient, osqueryClient, supplyChainClient, progressTracker, eventEmitter)
+}
+
+func resolveRuntimeRoot(configuredRuntimeRoot string, absoluteExecutable string) (string, error) {
+	if configuredRuntimeRoot == "" {
+		return filepath.Dir(filepath.Dir(absoluteExecutable)), nil
+	}
+	if !filepath.IsAbs(configuredRuntimeRoot) {
+		return "", fmt.Errorf("configure scanner runtime root %q: path must be absolute", configuredRuntimeRoot)
+	}
+	runtimeRoot := filepath.Clean(configuredRuntimeRoot)
+	information, err := os.Stat(runtimeRoot)
+	if err != nil {
+		return "", fmt.Errorf("configure scanner runtime root %q: stat directory: %w", runtimeRoot, err)
+	}
+	if !information.IsDir() {
+		return "", fmt.Errorf("configure scanner runtime root %q: path is not a directory", runtimeRoot)
+	}
+	return runtimeRoot, nil
+}
+
+func resolveDataDirectory(configuredDirectory string, projectRoot string) (string, error) {
+	if configuredDirectory == "" {
+		return filepath.Join(projectRoot, ".tools"), nil
+	}
+	if !filepath.IsAbs(configuredDirectory) {
+		return "", fmt.Errorf("configure scan data directory %q: path must be absolute", configuredDirectory)
+	}
+	cleanDirectory := filepath.Clean(configuredDirectory)
+	if cleanDirectory == string(filepath.Separator) {
+		return "", fmt.Errorf("configure scan data directory %q: filesystem root is not allowed", configuredDirectory)
+	}
+	if err := os.MkdirAll(cleanDirectory, 0o700); err != nil {
+		return "", fmt.Errorf("configure scan data directory %q: create directory: %w", cleanDirectory, err)
+	}
+	information, err := os.Stat(cleanDirectory)
+	if err != nil {
+		return "", fmt.Errorf("configure scan data directory %q: inspect directory: %w", cleanDirectory, err)
+	}
+	if !information.IsDir() {
+		return "", fmt.Errorf("configure scan data directory %q: path is not a directory", cleanDirectory)
+	}
+	return cleanDirectory, nil
 }
 
 func run(parentContext context.Context, command cli.ScanCommand, executable string, effectiveUID int, stdin io.Reader, stderr io.Writer, sofaClient sofa.Client, osqueryClient osquerycollector.Client, supplyChainClient supplychain.Client, progressTracker progress.Tracker, eventEmitter eventstream.Emit) (Result, error) {
@@ -335,6 +386,13 @@ func checkContext(parentContext context.Context, operation string) error {
 }
 
 func writeReport(outputDirectory string, run model.ScanRun, artifacts []artifact.Record) (string, error) {
+	catalogDocument, err := catalog.Load()
+	if err != nil {
+		return "", OutputError{Path: outputDirectory, Cause: err}
+	}
+	if err := catalog.ValidateFindingSources(catalogDocument, run.Findings); err != nil {
+		return "", OutputError{Path: outputDirectory, Cause: err}
+	}
 	if err := model.ValidateScanRun(run); err != nil {
 		return "", OutputError{Path: outputDirectory, Cause: err}
 	}

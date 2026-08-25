@@ -158,6 +158,7 @@ func unavailableSupplyChainClient(t *testing.T) supplychain.Client {
 		SyftExpectedCommit:     supplychain.SyftExpectedCommit,
 		SyftExpectedSHA256:     supplychain.SyftExpectedExecutableHash,
 		SyftConfigPath:         filepath.Join(root, "missing-syft.yaml"),
+		SyftRuntimeDirectory:   filepath.Join(root, "syft-runtime"),
 		GrypeExecutablePath:    filepath.Join(root, "missing-grype"),
 		GrypeExpectedVersion:   supplychain.GrypeExpectedVersion,
 		GrypeExpectedCommit:    supplychain.GrypeExpectedCommit,
@@ -192,12 +193,63 @@ func TestRunRejectsRootOrchestrator(t *testing.T) {
 		PrivilegeRequested: true,
 	}
 
-	_, err := Run(context.Background(), command, "/tmp/macscope", 0, strings.NewReader(""), os.Stderr, progress.Disabled(os.Stderr), eventstream.Disabled())
+	_, err := Run(context.Background(), command, "/tmp/macscope", "", 0, strings.NewReader(""), os.Stderr, progress.Disabled(os.Stderr), eventstream.Disabled())
 	if err == nil {
 		t.Fatal("Run returned nil error, want ExecutionIdentityError")
 	}
 	if _, ok := err.(ExecutionIdentityError); !ok {
 		t.Fatalf("error type = %T, want ExecutionIdentityError", err)
+	}
+}
+
+func TestResolveDataDirectoryCreatesExplicitWritableLocation(t *testing.T) {
+	root := t.TempDir()
+	directory := filepath.Join(root, "Application Support", "MacScope", "Data")
+	resolved, err := resolveDataDirectory(directory, "/tmp/project")
+	if err != nil {
+		t.Fatalf("resolveDataDirectory returned an error: %v", err)
+	}
+	if resolved != directory {
+		t.Fatalf("resolved directory = %q, want %q", resolved, directory)
+	}
+	information, err := os.Stat(directory)
+	if err != nil {
+		t.Fatalf("inspect created data directory: %v", err)
+	}
+	if !information.IsDir() {
+		t.Fatalf("created path mode = %s, want directory", information.Mode())
+	}
+}
+
+func TestResolveDataDirectoryRejectsUnsafePaths(t *testing.T) {
+	for _, path := range []string{"relative/data", "/"} {
+		if _, err := resolveDataDirectory(path, "/tmp/project"); err == nil {
+			t.Fatalf("resolveDataDirectory(%q) returned nil error", path)
+		}
+	}
+}
+
+func TestResolveRuntimeRootUsesConfiguredAbsoluteDirectory(t *testing.T) {
+	runtimeRoot := t.TempDir()
+	resolved, err := resolveRuntimeRoot(runtimeRoot, "/tmp/bin/macscope")
+	if err != nil {
+		t.Fatalf("resolveRuntimeRoot returned an error: %v", err)
+	}
+	if resolved != runtimeRoot {
+		t.Fatalf("runtime root = %q, want %q", resolved, runtimeRoot)
+	}
+}
+
+func TestResolveRuntimeRootRejectsInvalidConfiguredPaths(t *testing.T) {
+	regularFile := filepath.Join(t.TempDir(), "runtime")
+	if err := os.WriteFile(regularFile, []byte("not a directory"), 0o600); err != nil {
+		t.Fatalf("write runtime test file: %v", err)
+	}
+	testCases := []string{"relative/runtime", regularFile, filepath.Join(t.TempDir(), "missing")}
+	for _, configured := range testCases {
+		if _, err := resolveRuntimeRoot(configured, "/tmp/bin/macscope"); err == nil {
+			t.Fatalf("resolveRuntimeRoot(%q) returned nil error", configured)
+		}
 	}
 }
 

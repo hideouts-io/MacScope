@@ -21,10 +21,8 @@ struct RootView: View {
                 } else {
                     Button {
                         coordinator.startStandardScan()
-                    } label: {
-                        Label("Start Scan", systemImage: "play.fill")
-                    }
-                    .buttonStyle(.borderedProminent)
+                    } label: { Text("New Scan") }
+                    .buttonStyle(.bordered)
                     .accessibilityIdentifier("scan.start.toolbar")
                 }
             }
@@ -108,7 +106,7 @@ struct RootView: View {
         case .history:
             HistoryView(coordinator: coordinator)
         case .findingsLibrary:
-            FindingsLibraryView()
+            FindingsLibraryView(coordinator: coordinator)
         case .settings:
             SettingsView(coordinator: coordinator)
         }

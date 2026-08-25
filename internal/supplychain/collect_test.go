@@ -1,6 +1,7 @@
 package supplychain
 
 import (
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
@@ -56,6 +57,15 @@ func TestValidateUserExclusionsRejectsUnsafeOrMissingPaths(t *testing.T) {
 				t.Fatalf("missing-path error = %v, want os.ErrNotExist", err)
 			}
 		})
+	}
+}
+
+func TestDiscoverDatalessICloudPathsStopsForCanceledContext(t *testing.T) {
+	parentContext, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err := discoverDatalessICloudPaths(parentContext, t.TempDir())
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("discoverDatalessICloudPaths error = %v, want context.Canceled", err)
 	}
 }
 

@@ -20,6 +20,7 @@ const (
 
 type ScanCommand struct {
 	OutputDirectory    string
+	DataDirectory      string
 	PrivilegeRequested bool
 	ExcludedPaths      []string
 	EventsJSON         bool
@@ -120,6 +121,7 @@ func parseScan(arguments []string) (Command, error) {
 	flags := flag.NewFlagSet("scan", flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
 	outputDirectory := flags.String("output", "", "directory for scan artifacts")
+	dataDirectory := flags.String("data-directory", "", "writable directory for scanner databases and runtime files")
 	privilegeRequested := flags.Bool("privileged", false, "run narrow read-only collectors through sudo")
 	eventsJSON := flags.Bool("events-json", false, "write versioned NDJSON scan events to stdout")
 	excludedPaths := make(repeatedStringFlag, 0)
@@ -139,6 +141,7 @@ func parseScan(arguments []string) (Command, error) {
 		Kind: CommandScan,
 		Scan: ScanCommand{
 			OutputDirectory:    *outputDirectory,
+			DataDirectory:      *dataDirectory,
 			PrivilegeRequested: *privilegeRequested,
 			ExcludedPaths:      append([]string(nil), excludedPaths...),
 			EventsJSON:         *eventsJSON,
@@ -147,7 +150,7 @@ func parseScan(arguments []string) (Command, error) {
 }
 
 func Usage() string {
-	return "Usage:\n  macscope scan --output <directory> [--privileged] [--events-json] [--exclude <absolute-path>]...\n  macscope report --input <scan.json> --output <report.html>\n  macscope version\n  macscope help"
+	return "Usage:\n  macscope scan --output <directory> [--data-directory <directory>] [--privileged] [--events-json] [--exclude <absolute-path>]...\n  macscope report --input <scan.json> --output <report.html>\n  macscope version\n  macscope help"
 }
 
 func IsUsageError(err error) bool {

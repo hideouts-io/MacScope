@@ -40,17 +40,18 @@ Acceptance criteria:
 
 ## 3. Guided scan setup
 
-- [ ] Provide Standard and Enhanced Read-Only scan choices.
-- [ ] Explain what privileged coverage adds before requesting authorization.
+- [x] Provide Standard and Enhanced Read-Only scan choices. Enhanced remains unavailable until the signed helper passes phase 11.
+- [ ] Let users select individual instruments while preserving one scan ID, one evidence set, and explicit not-scanned coverage for every disabled instrument.
+- [x] Explain what privileged coverage adds before requesting authorization.
 - [ ] Add file and directory inclusion pickers.
-- [ ] Add repeatable file and directory exclusion controls.
-- [ ] Skip OneDrive by default and display that decision before scanning.
-- [ ] Include locally downloaded iCloud content without forcing cloud-only files to download.
-- [ ] Report dataless iCloud items as explicit coverage exclusions.
+- [x] Add repeatable file and directory exclusion controls.
+- [x] Skip OneDrive by default and display that decision before scanning.
+- [x] Include locally downloaded iCloud content without forcing cloud-only files to download.
+- [x] Report dataless iCloud items as explicit coverage exclusions.
 - [ ] Add optional large-archive exclusions with the resulting coverage impact.
-- [ ] Show expected instruments, network access, disk usage, and approximate scan scope.
-- [ ] Save named scan profiles without storing credentials.
-- [ ] Add a preflight check for free space, required permissions, tool integrity, and database availability.
+- [x] Show expected instruments, network access, disk usage, and approximate scan scope.
+- [x] Save named scan profiles without storing credentials.
+- [x] Add a preflight check for free space, required permissions, tool integrity, and database availability.
 
 Acceptance criteria:
 
@@ -58,15 +59,15 @@ Acceptance criteria:
 
 ## 4. Live Activity
 
-- [ ] Show honest overall orchestration progress and elapsed time.
-- [ ] Show queued, running, completed, failed, canceled, and not-scanned states per instrument.
-- [ ] Use indeterminate progress when an upstream tool does not expose real item counts.
-- [ ] Display the exact executable path and argument array for each nonprivileged command.
+- [x] Show honest overall orchestration progress and elapsed time.
+- [x] Show queued, running, completed, failed, canceled, and not-scanned states per instrument.
+- [x] Use indeterminate progress when an upstream tool does not expose real item counts.
+- [x] Display the exact executable path and argument array for each nonprivileged command.
 - [ ] Display the approved operation name rather than inventing a shell command for privileged helper requests.
-- [ ] Stream timestamped stdout and stderr with instrument and command filters.
-- [ ] Add search, copy, save, and redacted-export controls.
+- [x] Stream timestamped stdout and stderr with instrument and command filters.
+- [x] Add search, copy, save, and redacted-export controls.
 - [ ] Show artifacts as they are written and findings as they become available.
-- [ ] Keep raw output local and warn before exporting host-identifying data.
+- [x] Keep raw output local and mark output that may contain host-identifying data.
 
 Acceptance criteria:
 
@@ -74,13 +75,13 @@ Acceptance criteria:
 
 ## 5. Dashboard and Attention views
 
-- [ ] Show last scan time, run status, host summary, and privilege coverage.
-- [ ] Show finding totals by severity without inventing a security score.
-- [ ] Highlight known-exploited vulnerabilities.
-- [ ] Highlight failed controls, unexpected exposures, persistence findings, threat indicators, tool errors, and coverage gaps.
-- [ ] Separate failed tests from not-scanned and unknown results.
-- [ ] Explain that an anomaly is an unexpected or failed observation, not proof of compromise.
-- [ ] Link every dashboard count to the filtered records behind it.
+- [x] Show last scan time, run status, host summary, and privilege coverage.
+- [x] Show finding totals by severity without inventing a security score.
+- [x] Highlight known-exploited vulnerabilities.
+- [x] Highlight failed controls, unexpected exposures, persistence findings, threat indicators, tool errors, and coverage gaps.
+- [x] Separate failed tests from not-scanned and unknown results.
+- [x] Explain that an anomaly is an unexpected or failed observation, not proof of compromise.
+- [x] Link every dashboard count to the filtered records behind it.
 
 Acceptance criteria:
 
@@ -88,15 +89,15 @@ Acceptance criteria:
 
 ## 6. Findings reader and remediation
 
-- [ ] Add search and filters for severity, category, instrument, confidence, KEV status, administrator requirement, and restart requirement.
-- [ ] Show what was found, why it was flagged, why it matters, and what it does not prove.
-- [ ] Show affected components, CVE/GHSA/OSV references, CVSS, EPSS, and known-exploited status.
-- [ ] Link source tools, rule IDs, evidence records, and hashed artifacts.
-- [ ] Present remediation as ordered, plain-language steps.
-- [ ] Show side effects, administrator requirements, restart requirements, and authoritative references.
+- [x] Add search and filters for severity, category, instrument, confidence, KEV status, administrator requirement, and restart requirement.
+- [x] Show what was found, why it was flagged, why it matters, and what it does not prove.
+- [x] Show affected components, CVE/GHSA/OSV references, CVSS, EPSS, and known-exploited status.
+- [x] Link source tools, rule IDs, evidence records, and hashed artifacts.
+- [x] Present remediation as ordered, plain-language steps.
+- [x] Show administrator requirements, restart requirements, and authoritative references. Structured side-effect metadata remains to be added.
 - [ ] Add post-remediation verification steps and a targeted rescan action.
-- [ ] Keep remediation instructional and read-only for the first release.
-- [ ] Require action preview, confirmation, authorization, rollback information, and verification before any future automated remediation.
+- [x] Keep remediation instructional and read-only for the first release.
+- [x] Keep automated remediation absent until action preview, confirmation, authorization, rollback information, and verification are designed and reviewed.
 
 Acceptance criteria:
 
@@ -104,11 +105,11 @@ Acceptance criteria:
 
 ## 7. Instrument views
 
-- [ ] Add dedicated pages for native MacScope probes, SOFA, mSCP, osquery, Syft, and Grype.
-- [ ] Show instrument purpose, version, executable hash, upstream origin, and data provenance.
-- [ ] Group findings, evidence, commands, coverage, artifacts, warnings, and errors by instrument.
-- [ ] Show scan duration and the exact targets assessed by each instrument.
-- [ ] Distinguish unavailable tools from successful tools that found no issues.
+- [x] Add dedicated expandable result sections for native MacScope probes, SOFA, mSCP, osquery, Syft, and Grype.
+- [x] Show instrument purpose, version, executable hash, upstream origin, and data provenance.
+- [x] Group findings, evidence, coverage, and artifacts by instrument; live commands, warnings, and errors remain in filtered Live Activity.
+- [x] Show the exact targets assessed by each instrument. Per-instrument duration remains to be summarized.
+- [x] Distinguish unavailable tools from successful tools that found no issues.
 
 Acceptance criteria:
 
@@ -116,11 +117,11 @@ Acceptance criteria:
 
 ## 8. Coverage view
 
-- [ ] Display complete, partial, not-scanned, failed, permission-denied, excluded, cloud-only, tool-unavailable, and network-unavailable states.
+- [x] Display complete, partial, not-scanned, failed, permission-denied, excluded, cloud-only, tool-unavailable, and network-unavailable states.
 - [ ] Show user exclusions and fixed safety exclusions separately.
-- [ ] Explain the impact of every gap on conclusions.
-- [ ] Add permission guidance for coverage that requires user approval.
-- [ ] Prevent “no vulnerabilities found” language when relevant coverage is incomplete.
+- [x] Explain the impact of every gap on conclusions.
+- [x] Add permission guidance for coverage that requires user approval.
+- [x] Prevent “no vulnerabilities found” language when relevant coverage is incomplete.
 
 Acceptance criteria:
 
@@ -128,12 +129,12 @@ Acceptance criteria:
 
 ## 9. Findings Library and master documentation
 
-- [ ] Create one structured rule catalog as the source of truth for all supported findings.
-- [ ] Store stable rule ID, title, category, explanation, detection logic, severity rationale, expected evidence, limitations, remediation, verification, and references.
-- [ ] Generate the in-app Findings Library and master Markdown/HTML handbook from the same catalog.
-- [ ] Distinguish the complete rule handbook from findings detected in a particular scan.
-- [ ] Validate that emitted finding source references resolve to catalog entries.
-- [ ] Show which instruments and macOS versions support each rule.
+- [x] Create one structured rule-family catalog as the source of truth for supported finding sources.
+- [x] Store stable catalog ID, responsible tool, rule matching, title, category, explanation, detection logic, severity rationale, expected evidence, limitations, remediation, verification, references, and supported macOS versions.
+- [x] Generate the in-app Findings Library and master Markdown/HTML handbook from the same catalog.
+- [x] Distinguish the complete rule handbook from findings detected in a particular scan.
+- [x] Validate that emitted finding source references resolve to catalog entries.
+- [x] Show which instruments and macOS versions support each rule family.
 
 Acceptance criteria:
 
@@ -141,12 +142,12 @@ Acceptance criteria:
 
 ## 10. Scan history and comparisons
 
-- [ ] Preserve each validated scan directory as immutable evidence.
-- [ ] Maintain a local index without rewriting historical `scan.json` files.
-- [ ] Compare runs as new, persistent, resolved, and coverage-changed.
-- [ ] Compare tool versions, database identities, exclusions, and permissions before interpreting differences.
-- [ ] Add retention settings and explicit deletion confirmation.
-- [ ] Support exporting one run or a comparison report.
+- [x] Preserve each validated scan directory as immutable evidence.
+- [x] Maintain a local metadata index without rewriting historical `scan.json` files.
+- [x] Compare runs as new, persistent, resolved, and coverage-changed; resolved remains hidden when coverage/tool identity differs.
+- [x] Compare tool versions and coverage states before interpreting differences. Database identity, exclusions, and permissions remain to be added to comparison identity.
+- [x] Add retention settings that flag older scans and require explicit confirmation before moving an evidence directory to Trash.
+- [x] Support exporting one run as validated JSON, offline HTML, or a portable evidence directory. Comparison-report export remains pending.
 
 Acceptance criteria:
 
@@ -154,14 +155,14 @@ Acceptance criteria:
 
 ## 11. Privileged helper and permissions
 
-- [ ] Keep the SwiftUI app and Go orchestrator unprivileged.
+- [x] Keep the SwiftUI app and Go orchestrator unprivileged.
 - [ ] Replace GUI `sudo` prompting with a signed, narrowly scoped Service Management helper using XPC.
 - [ ] Let macOS Authorization Services own credential and Touch ID prompts.
-- [ ] Never accept, read, record, transmit, or store password text.
+- [x] Never accept, read, record, transmit, or store password text.
 - [ ] Expose only fixed read-only helper operations; never expose arbitrary root command execution.
 - [ ] Validate the signed requesting application before processing XPC requests.
 - [ ] Show helper installation, authorization, operation, and result states in the GUI.
-- [ ] Add guided Full Disk Access and other permission status checks without changing settings automatically.
+- [x] Add guided Full Disk Access and other permission status checks without changing settings automatically.
 - [ ] Threat-model and test the helper protocol before release.
 
 Acceptance criteria:
@@ -170,13 +171,13 @@ Acceptance criteria:
 
 ## 12. Local storage, privacy, and exports
 
-- [ ] Store application data under `~/Library/Application Support/MacScope` by default.
-- [ ] Keep scans, raw logs, databases, and temporary files out of iCloud Drive and OneDrive unless the user explicitly exports there.
-- [ ] Keep telemetry disabled by default.
-- [ ] Provide raw local export and separately labeled redacted export.
-- [ ] Identify hostnames, usernames, paths, process arguments, and other sensitive fields before export.
-- [ ] Preserve artifact SHA-256 values and provenance in portable evidence bundles.
-- [ ] Export validated JSON and offline HTML first; add PDF only after layout and evidence-link verification.
+- [x] Store application data under `~/Library/Application Support/MacScope` by default.
+- [x] Keep scans, raw logs, databases, and temporary files out of iCloud Drive and OneDrive unless the user explicitly exports there.
+- [x] Keep telemetry absent and disabled by default.
+- [x] Provide raw local evidence export and a separately labeled bounded redacted activity export. Full evidence-bundle redaction remains pending.
+- [x] Mark command output as potentially private and provide bounded username, hostname, and home-path redaction for activity export. Full evidence-bundle redaction remains pending.
+- [x] Preserve artifact SHA-256 values and provenance in portable evidence directories.
+- [x] Export validated JSON and offline HTML first; PDF remains deferred until layout and evidence-link verification.
 
 Acceptance criteria:
 
@@ -184,10 +185,10 @@ Acceptance criteria:
 
 ## 13. Packaging, updates, and release
 
-- [ ] Bundle the Go engine and supported pinned third-party executables inside `MacScope.app`.
+- [x] Bundle the Go engine and supported pinned third-party executables inside `MacScope.app`.
 - [ ] Review and include required third-party licenses and acknowledgements.
-- [ ] Verify bundled executable versions and hashes before every scan.
-- [ ] Download and validate the Grype database with visible first-run progress.
+- [x] Verify bundled executable hashes during enterprise preflight and again inside the engine before collection.
+- [x] Download and validate the Grype database in writable Application Support storage with visible first-run progress.
 - [ ] Sign nested executables and helpers before signing the outer app.
 - [ ] Enable hardened runtime and use a Developer ID identity.
 - [ ] Notarize and staple the application and DMG or installer package.
@@ -201,14 +202,14 @@ Acceptance criteria:
 
 ## 14. Quality and release gates
 
-- [ ] Keep the Go CLI fully supported and backward compatible.
-- [ ] Run Go formatting, vet, race tests, shuffled tests, build, and CLI smoke tests.
+- [x] Keep the Go CLI fully supported and backward compatible.
+- [x] Run Go formatting, vet, race tests, shuffled tests, build, and CLI smoke tests.
 - [ ] Add Swift formatting, static analysis, unit tests, and end-to-end application tests.
-- [ ] Use accessibility identifiers for UI automation.
+- [x] Use accessibility identifiers for primary UI automation flows; expand identifiers with each future end-to-end test.
 - [ ] Test real subprocess and report integrations; avoid mock-only confidence.
 - [ ] Test offline, slow-network, canceled, permission-denied, tool-corrupt, database-stale, and low-disk scenarios.
-- [ ] Validate all scan and event documents with strict decoders.
-- [ ] Verify that no private scans, databases, credentials, or host-specific logs enter Git.
+- [x] Validate all Go scan and event documents with strict decoders; Swift event parsing also enforces schema version and sequence ordering.
+- [x] Verify that private scans, databases, bundled tool downloads, credentials, and host-specific logs remain excluded from Git.
 - [ ] Complete an accessibility, privacy, privilege-boundary, and evidence-integrity review before release.
 
 Acceptance criteria:

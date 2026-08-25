@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MacScope Findings Library</title>
+<style>
+:root { color-scheme: light dark; --accent: #c61d35; --panel: color-mix(in srgb, Canvas 94%, CanvasText 6%); --border: color-mix(in srgb, CanvasText 18%, transparent); }
+* { box-sizing: border-box; }
+body { margin: 0; font: 16px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: Canvas; color: CanvasText; }
+header { padding: 3.5rem clamp(1.25rem, 5vw, 5rem); color: white; background: linear-gradient(135deg, #701020, #c61d35 60%, #e14c60); }
+header p { max-width: 58rem; margin-bottom: 0; opacity: .92; }
+main { width: min(74rem, calc(100% - 2.5rem)); margin: 2rem auto 5rem; }
+nav, article { border: 1px solid var(--border); border-radius: 16px; background: var(--panel); box-shadow: 0 12px 30px rgba(0,0,0,.08); }
+nav { padding: 1.25rem 1.5rem; margin-bottom: 1.5rem; }
+nav ul { columns: 2; padding-left: 1.25rem; }
+article { padding: clamp(1.25rem, 3vw, 2.25rem); margin: 1.25rem 0; }
+h1, h2, h3 { line-height: 1.2; }
+h2 { margin-top: 0; }
+a { color: var(--accent); }
+.metadata { display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); gap: .75rem; }
+.metadata div { padding: .75rem; border: 1px solid var(--border); border-radius: 10px; }
+.label { display: block; font-size: .78rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; opacity: .66; }
+code { overflow-wrap: anywhere; }
+@media (max-width: 650px) { nav ul { columns: 1; } header { padding-top: 2.5rem; } }
+@media print { header { background: none; color: black; padding: 1rem 0; } nav, article { box-shadow: none; break-inside: avoid; } }
+</style>
+</head>
+<body>
+<header><h1>MacScope Findings Library</h1><p>This handbook describes every rule family MacScope can emit. It is generated from the same validated catalog used by the application and scanner; it is not a report of findings detected on a particular Mac.</p></header>
+<main>
+<nav aria-label="Rule families"><h2>Rule families</h2><ul><li><a href="#native-macos-security-control">Native macOS security control</a> · <code>macscope</code></li><li><a href="#apple-release-and-xprotect-posture">Apple release and XProtect posture</a> · <code>sofa</code></li><li><a href="#mscp-configuration-control">mSCP configuration control</a> · <code>mscp</code></li><li><a href="#osquery-inventory-and-exposure-query">osquery inventory and exposure query</a> · <code>osquery</code></li><li><a href="#package-vulnerability-match">Package vulnerability match</a> · <code>grype</code></li><li><a href="#macscope-orchestration-and-coverage">MacScope orchestration and coverage</a> · <code>macscope</code></li></ul></nav>
+<article id="native-macos-security-control">
+<h2>Native macOS security control</h2>
+<div class="metadata"><div><span class="label">Catalog ID</span><code>native-security-controls</code></div><div><span class="label">Instrument</span><code>macscope</code></div><div><span class="label">Rule matching</span><code>prefix · native.</code></div><div><span class="label">Category</span><code>configuration</code></div></div>
+<h3>Explanation</h3><p>A fixed read-only macOS command is parsed into an expected or failed security-control observation.</p>
+<h3>Detection logic</h3><p>Typed parsers validate command output; execution and coverage failures remain separate evidence-backed findings.</p>
+<h3>Expected state</h3><p>The control reports the secure state defined by the individual native rule.</p>
+<h3>Observed-state interpretation</h3><p>A failed state means the named protection is weaker than expected; an execution or permission failure means the state is unknown.</p>
+<h3>Severity rationale</h3><p>The individual control assigns severity according to the protection weakened by the observed state.</p>
+<h3>Expected evidence</h3><ul><li>Executable and arguments</li><li>Exit status and exact output</li><li>Parsed observation and artifact hash</li></ul>
+<h3>Possible false positives</h3><ul><li>An intentionally disabled control may be required by a documented operational workflow</li></ul>
+<h3>Limitations</h3><ul><li>A weakened control does not prove exploitation or compromise</li></ul>
+<h3>Remediation</h3><ol><li>Follow the finding-specific ordered steps after reviewing operational impact</li></ol>
+<h3>Verification</h3><ol><li>Run a new scan and confirm the rule passes with comparable coverage</li></ol>
+<h3>Supported macOS versions</h3><ul><li>macOS 26 Tahoe</li></ul>
+<h3>References</h3><ul><li><a href="https://support.apple.com/guide/security/welcome/web" rel="noreferrer">https://support.apple.com/guide/security/welcome/web</a></li></ul>
+</article><article id="apple-release-and-xprotect-posture">
+<h2>Apple release and XProtect posture</h2>
+<div class="metadata"><div><span class="label">Catalog ID</span><code>sofa-release-and-xprotect</code></div><div><span class="label">Instrument</span><code>sofa</code></div><div><span class="label">Rule matching</span><code>prefix · sofa.</code></div><div><span class="label">Category</span><code>os_vulnerability</code></div></div>
+<h3>Explanation</h3><p>The installed macOS build and XProtect versions are compared with validated SOFA security-feed records.</p>
+<h3>Detection logic</h3><p>Installed versions are matched to current feed records; unavailable or inconsistent data becomes a coverage finding.</p>
+<h3>Expected state</h3><p>The installed macOS build and XProtect data meet the latest applicable validated SOFA records.</p>
+<h3>Observed-state interpretation</h3><p>An older version indicates update exposure; unavailable feed or version evidence indicates unknown coverage rather than a pass.</p>
+<h3>Severity rationale</h3><p>Security-release and known-exploited context determine priority; missing feed coverage is never a pass.</p>
+<h3>Expected evidence</h3><ul><li>Installed build</li><li>Installed XProtect versions</li><li>Validated SOFA response and feed identity</li></ul>
+<h3>Possible false positives</h3><ul><li>A staged enterprise update rollout may intentionally lag the latest public release</li><li>SOFA may not yet describe a newly released macOS build</li></ul>
+<h3>Limitations</h3><ul><li>Release metadata does not prove exploitation</li><li>Network or feed failure limits conclusions</li></ul>
+<h3>Remediation</h3><ol><li>Install applicable macOS and security-data updates from System Settings</li></ol>
+<h3>Verification</h3><ol><li>Rescan and confirm installed versions match current feed records</li></ol>
+<h3>Supported macOS versions</h3><ul><li>macOS 26 Tahoe</li></ul>
+<h3>References</h3><ul><li><a href="https://support.apple.com/en-us/100100" rel="noreferrer">https://support.apple.com/en-us/100100</a></li><li><a href="https://sofa.macadmins.io/" rel="noreferrer">https://sofa.macadmins.io/</a></li></ul>
+</article><article id="mscp-configuration-control">
+<h2>mSCP configuration control</h2>
+<div class="metadata"><div><span class="label">Catalog ID</span><code>mscp-configuration</code></div><div><span class="label">Instrument</span><code>mscp</code></div><div><span class="label">Rule matching</span><code>vulnerability · mscp-rule-identifier</code></div><div><span class="label">Category</span><code>configuration</code></div></div>
+<h3>Explanation</h3><p>A reviewed subset of the NIST macOS Security Compliance Project baseline is evaluated with validated evidence.</p>
+<h3>Detection logic</h3><p>Observed values are compared with the expected CIS Level 1 value for the supported macOS release.</p>
+<h3>Expected state</h3><p>The observed value matches the pinned CIS Level 1 expectation for the supported macOS release.</p>
+<h3>Observed-state interpretation</h3><p>A mismatch is a configuration finding; unsupported platforms or uncollected evidence are coverage gaps.</p>
+<h3>Severity rationale</h3><p>Severity reflects control impact and is not a claim of compromise.</p>
+<h3>Expected evidence</h3><ul><li>Stable mSCP rule ID</li><li>Observed and expected values</li><li>Baseline and coverage identity</li></ul>
+<h3>Possible false positives</h3><ul><li>An approved compensating control or documented business exception may justify a different setting</li></ul>
+<h3>Limitations</h3><ul><li>MacScope implements a documented subset</li><li>Unsupported systems are coverage gaps</li></ul>
+<h3>Remediation</h3><ol><li>Follow the finding-specific guidance after reviewing operational impact</li></ol>
+<h3>Verification</h3><ol><li>Rescan with the same baseline and comparable coverage</li></ol>
+<h3>Supported macOS versions</h3><ul><li>macOS 26 Tahoe</li></ul>
+<h3>References</h3><ul><li><a href="https://github.com/usnistgov/macos_security" rel="noreferrer">https://github.com/usnistgov/macos_security</a></li></ul>
+</article><article id="osquery-inventory-and-exposure-query">
+<h2>osquery inventory and exposure query</h2>
+<div class="metadata"><div><span class="label">Catalog ID</span><code>osquery-inventory</code></div><div><span class="label">Instrument</span><code>osquery</code></div><div><span class="label">Rule matching</span><code>prefix · query.</code></div><div><span class="label">Category</span><code>tool_error</code></div></div>
+<h3>Explanation</h3><p>Pinned osquery queries inventory applications, persistence mechanisms, and listening sockets.</p>
+<h3>Detection logic</h3><p>Structured query results are validated before becoming evidence; execution or parse failure becomes a tool error.</p>
+<h3>Expected state</h3><p>The query completes with valid structured output and every returned record can be reviewed in operational context.</p>
+<h3>Observed-state interpretation</h3><p>An inventory record establishes presence only; a failed query removes coverage and does not imply that no records exist.</p>
+<h3>Severity rationale</h3><p>Inventory presence is contextual; failure priority reflects the coverage it removes.</p>
+<h3>Expected evidence</h3><ul><li>Pinned executable hash</li><li>SQL argument and JSON output</li><li>Target coverage</li></ul>
+<h3>Possible false positives</h3><ul><li>Legitimate software commonly installs launch items or opens local listening sockets</li></ul>
+<h3>Limitations</h3><ul><li>Persistence or a listener does not establish malicious intent or reachability</li></ul>
+<h3>Remediation</h3><ol><li>Verify owning software and business purpose before changing it</li></ol>
+<h3>Verification</h3><ol><li>Rescan the same target and compare validated records</li></ol>
+<h3>Supported macOS versions</h3><ul><li>macOS 26 Tahoe</li></ul>
+<h3>References</h3><ul><li><a href="https://osquery.io/" rel="noreferrer">https://osquery.io/</a></li></ul>
+</article><article id="package-vulnerability-match">
+<h2>Package vulnerability match</h2>
+<div class="metadata"><div><span class="label">Catalog ID</span><code>grype-vulnerability-match</code></div><div><span class="label">Instrument</span><code>grype</code></div><div><span class="label">Rule matching</span><code>vulnerability · vulnerability-identifier</code></div><div><span class="label">Category</span><code>software_vulnerability</code></div></div>
+<h3>Explanation</h3><p>A package and version in the validated Syft SBOM matched a record in the validated Grype database.</p>
+<h3>Detection logic</h3><p>The SBOM, database identity, match report, identifiers, and post-scan database digest are validated.</p>
+<h3>Expected state</h3><p>Installed package versions have no applicable matches in the validated vulnerability database.</p>
+<h3>Observed-state interpretation</h3><p>A match identifies a package/version requiring applicability review; it does not establish reachability, execution, or exploitation.</p>
+<h3>Severity rationale</h3><p>Severity, CVSS, EPSS, and known-exploited status guide priority while reachability remains contextual.</p>
+<h3>Expected evidence</h3><ul><li>Package identity</li><li>Grype match</li><li>Database version, source, time, and hash</li></ul>
+<h3>Possible false positives</h3><ul><li>Vendor backports may fix a vulnerability without changing the upstream version string</li><li>The matched component may be installed but unreachable in the deployed configuration</li></ul>
+<h3>Limitations</h3><ul><li>A package match does not prove vulnerable code is reachable or executed</li><li>Vendor confirmation may be required</li></ul>
+<h3>Remediation</h3><ol><li>Update or remove the package through its authoritative distribution channel</li></ol>
+<h3>Verification</h3><ol><li>Regenerate the SBOM and rerun matching with comparable coverage</li></ol>
+<h3>Supported macOS versions</h3><ul><li>macOS 26 Tahoe</li></ul>
+<h3>References</h3><ul><li><a href="https://github.com/anchore/grype" rel="noreferrer">https://github.com/anchore/grype</a></li><li><a href="https://github.com/anchore/syft" rel="noreferrer">https://github.com/anchore/syft</a></li></ul>
+</article><article id="macscope-orchestration-and-coverage">
+<h2>MacScope orchestration and coverage</h2>
+<div class="metadata"><div><span class="label">Catalog ID</span><code>macscope-orchestration</code></div><div><span class="label">Instrument</span><code>macscope</code></div><div><span class="label">Rule matching</span><code>vulnerability · macscope-rule-identifier</code></div><div><span class="label">Category</span><code>coverage_gap</code></div></div>
+<h3>Explanation</h3><p>Tool provenance, execution, validation, network, and scope failures are reported instead of being treated as clean.</p>
+<h3>Detection logic</h3><p>A failed required operation creates linked evidence, coverage, and an explanatory finding.</p>
+<h3>Expected state</h3><p>Required tools, permissions, data sources, and targets complete with validated evidence.</p>
+<h3>Observed-state interpretation</h3><p>A failure or exclusion limits the conclusion for the named target and must remain unknown until comparable coverage succeeds.</p>
+<h3>Severity rationale</h3><p>Priority reflects missing evidence, not inferred compromise.</p>
+<h3>Expected evidence</h3><ul><li>Operation and error</li><li>Affected instrument or path</li><li>Coverage state</li></ul>
+<h3>Possible false positives</h3><ul><li>An intentionally offline scan or approved exclusion can produce an expected coverage gap</li></ul>
+<h3>Limitations</h3><ul><li>A coverage gap means unknown, not vulnerable and not secure</li></ul>
+<h3>Remediation</h3><ol><li>Resolve the reported permission, integrity, network, database, or execution issue</li></ol>
+<h3>Verification</h3><ol><li>Confirm the affected coverage record becomes complete in a later scan</li></ol>
+<h3>Supported macOS versions</h3><ul><li>macOS 26 Tahoe</li></ul>
+<h3>References</h3><ul><li><a href="https://github.com/hideouts-io/MacScope" rel="noreferrer">https://github.com/hideouts-io/MacScope</a></li></ul>
+</article>
+</main>
+</body>
+</html>

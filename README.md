@@ -26,6 +26,7 @@
 - [What MacScope Collects](#what-macscope-collects)
 - [Direct Observation vs. Inference](#direct-observation-vs-inference)
 - [Requirements](#requirements)
+- [MacScope.app](#macscopeapp)
 - [Quick Start](#quick-start)
 - [Install the Pinned Toolchain](#install-the-pinned-toolchain)
 - [Command Reference](#command-reference)
@@ -41,6 +42,7 @@
 - [Scan Document Contract](#scan-document-contract)
 - [Offline HTML Report](#offline-html-report)
 - [Finding and Coverage Taxonomy](#finding-and-coverage-taxonomy)
+- [Findings Library](#findings-library)
 - [Network Use, Retries, and Timeouts](#network-use-retries-and-timeouts)
 - [Live Scan Progress](#live-scan-progress)
 - [Machine-Readable Event Stream](#machine-readable-event-stream)
@@ -73,6 +75,8 @@ MacScope produces two primary outputs:
 
 1. `scan.json` — the strict, machine-readable scan document.
 2. `report.html` — an optional self-contained report generated offline from a validated `scan.json`.
+
+The native macOS application adds guided scan setup, enterprise preflight checks, live instrument activity, finding explanations, coverage review, and local scan history without requiring Terminal or development tools.
 
 ---
 
@@ -108,6 +112,30 @@ MacScope distinguishes posture observations from compromise evidence:
 | PF is disabled | PF is not currently reported active by `pfctl`. | Application Firewall is disabled. |
 | Application Firewall Block All is disabled | Block All is not enabled. | The firewall is disabled or the host is externally reachable. |
 | A scan area is partial | Named content or checks were not fully assessed. | Unscanned areas are safe. |
+
+---
+
+## MacScope.app
+
+`MacScope.app` is the native SwiftUI interface for the same typed Go scanning engine. It is designed for nontechnical users while keeping the evidence and privilege boundaries visible:
+
+- guided Standard scan setup with named, credential-free profiles;
+- user-selected file and directory exclusions, automatic OneDrive exclusion, and locally materialized iCloud coverage without intentional cloud hydration;
+- preflight verification of the bundled engine and third-party executable hashes, writable local storage, free space, permissions, and vulnerability-database readiness;
+- live, filterable command activity with measured versus indeterminate progress clearly distinguished;
+- dashboard, Attention, Findings, Instruments, Coverage, History, and Findings Library views;
+- local-only storage under `~/Library/Application Support/MacScope`; and
+- no invented security score, telemetry, silent upload, or automatic remediation.
+
+Enhanced Read-Only scanning remains unavailable in the GUI until its signed Service Management helper and fixed-operation XPC protocol pass the privilege-boundary release gates. The application never asks for or stores a macOS password.
+
+Developers can generate and build the Xcode project with:
+
+```bash
+cd app
+xcodegen generate --spec project.yml
+xcodebuild -project MacScope.xcodeproj -scheme MacScope -configuration Debug build
+```
 
 ---
 
@@ -285,11 +313,14 @@ curl --fail --location \
   https://github.com/osquery/osquery/releases/download/5.21.0/osquery-5.21.0_1.macos_arm64.tar.gz \
   --output .tools/downloads/osquery-5.21.0_1.macos_arm64.tar.gz
 shasum -a 256 .tools/downloads/osquery-5.21.0_1.macos_arm64.tar.gz
-tar -xzf .tools/downloads/osquery-5.21.0_1.macos_arm64.tar.gz \
+COPYFILE_DISABLE=1 tar -xzf .tools/downloads/osquery-5.21.0_1.macos_arm64.tar.gz \
   -C .tools/osquery/5.21.0 \
   --strip-components=3 \
-  usr/local/bin/osqueryi
+  opt/osquery/lib/osquery.app
+ln -s osquery.app/Contents/MacOS/osqueryd \
+  .tools/osquery/5.21.0/osqueryi
 shasum -a 256 .tools/osquery/5.21.0/osqueryi
+codesign --verify --deep --strict .tools/osquery/5.21.0/osquery.app
 ```
 
 ### 3. Syft and Grype
@@ -754,6 +785,27 @@ Severities are `info`, `low`, `medium`, `high`, and `critical`. Confidence level
 - `threat_indicators`
 
 Coverage states are `complete`, `partial`, `not_scanned`, and `failed`. Every non-complete record must include an explicit reason.
+
+---
+
+## Findings Library
+
+MacScope keeps one validated, structured rule-family catalog at [`internal/catalog/findings-catalog.json`](internal/catalog/findings-catalog.json). The scanner rejects emitted finding sources that cannot be resolved to that catalog, and the native application reads the bundled copy for its in-app Findings Library.
+
+The same catalog generates two master handbooks:
+
+- [Markdown Findings Library](docs/findings-library.md)
+- [Offline HTML Findings Library](docs/findings-library.html)
+
+Regenerate both deterministically after catalog changes:
+
+```bash
+.tools/go/bin/go run ./cmd/catalogdoc \
+  --markdown docs/findings-library.md \
+  --html docs/findings-library.html
+```
+
+The handbooks describe supported rule families; they are not scan reports and do not claim that any listed condition was detected on a particular Mac.
 
 ---
 

@@ -136,7 +136,7 @@ func run(parentContext context.Context, arguments []string, stdout io.Writer, st
 			return 1
 		}
 
-		result, scanErr := scan.Run(parentContext, command.Scan, executable, os.Geteuid(), os.Stdin, stderr, progressTracker, eventEmitter)
+		result, scanErr := scan.Run(parentContext, command.Scan, executable, os.Getenv("MACSCOPE_RUNTIME_ROOT"), os.Geteuid(), os.Stdin, stderr, progressTracker, eventEmitter)
 		progressErr := progressTracker.Close()
 		if scanErr != nil {
 			if progressErr != nil {

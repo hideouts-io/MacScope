@@ -36,6 +36,7 @@ type ClientConfig struct {
 	SyftExpectedCommit     string
 	SyftExpectedSHA256     string
 	SyftConfigPath         string
+	SyftRuntimeDirectory   string
 	GrypeExecutablePath    string
 	GrypeExpectedVersion   string
 	GrypeExpectedCommit    string
@@ -115,6 +116,7 @@ func validateClientConfig(config ClientConfig) error {
 	}{
 		{name: "syft executable", path: config.SyftExecutablePath},
 		{name: "syft configuration", path: config.SyftConfigPath},
+		{name: "syft runtime directory", path: config.SyftRuntimeDirectory},
 		{name: "grype executable", path: config.GrypeExecutablePath},
 		{name: "grype configuration", path: config.GrypeConfigPath},
 		{name: "grype database directory", path: config.GrypeDatabaseDirectory},

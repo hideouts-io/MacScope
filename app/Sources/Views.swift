@@ -63,11 +63,22 @@ struct DashboardView: View {
 
     @ViewBuilder
     private func completedDashboard(_ document: ScanDocument) -> some View {
-        HStack(spacing: 12) {
-            SummaryMetric(title: "Findings", value: "\(document.findings.count)", detail: "Detected records", color: .blue, symbol: "list.bullet.rectangle")
-            SummaryMetric(title: "High priority", value: "\(highPriorityCount(document))", detail: "Critical or high", color: .red, symbol: "exclamationmark.triangle.fill")
-            SummaryMetric(title: "Known exploited", value: "\(knownExploitedCount(document))", detail: "CISA KEV references", color: .purple, symbol: "bolt.shield.fill")
-            SummaryMetric(title: "Coverage gaps", value: "\(gapCount(document))", detail: "Partial or not scanned", color: .orange, symbol: "scope")
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 170), spacing: 12)], spacing: 12) {
+            metricButton(title: "Critical", value: severityCount(document, "critical"), detail: "Immediate review", color: .purple, symbol: "exclamationmark.octagon.fill", severity: "critical")
+            metricButton(title: "High", value: severityCount(document, "high"), detail: "Priority findings", color: .red, symbol: "exclamationmark.triangle.fill", severity: "high")
+            metricButton(title: "Medium", value: severityCount(document, "medium"), detail: "Review and plan", color: .orange, symbol: "exclamationmark.circle", severity: "medium")
+            metricButton(title: "Low", value: severityCount(document, "low"), detail: "Lower priority", color: .yellow, symbol: "info.circle", severity: "low")
+            Button {
+                coordinator.findingKnownExploitedOnly = true
+                coordinator.selectedSection = .findings
+            } label: {
+                SummaryMetric(title: "Known exploited", value: "\(knownExploitedCount(document))", detail: "CISA KEV references", color: .purple, symbol: "bolt.shield.fill")
+            }
+            .buttonStyle(.plain)
+            Button { coordinator.selectedSection = .coverage } label: {
+                SummaryMetric(title: "Coverage gaps", value: "\(gapCount(document))", detail: "Partial or not scanned", color: .orange, symbol: "scope")
+            }
+            .buttonStyle(.plain)
         }
 
         HStack(alignment: .top, spacing: MacScopeStyle.contentSpacing) {
@@ -78,6 +89,7 @@ struct DashboardView: View {
                 LabeledContent("macOS", value: [document.host.macOSVersion, document.host.macOSBuild].compactMap { $0 }.joined(separator: " · "))
                 LabeledContent("Chip", value: document.host.chip ?? document.host.architecture)
                 LabeledContent("Run status", value: displayName(document.status))
+                LabeledContent("Completed", value: document.completedAt)
                 LabeledContent("Privilege", value: document.privilege.granted ? "Enhanced read-only" : "Standard")
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -114,6 +126,17 @@ struct DashboardView: View {
         }
         .macScopeCard()
     }
+
+    private func metricButton(title: String, value: Int, detail: String, color: Color, symbol: String, severity: String) -> some View {
+        Button {
+            coordinator.findingSeverity = severity
+            coordinator.selectedSection = .findings
+        } label: {
+            SummaryMetric(title: title, value: "\(value)", detail: detail, color: color, symbol: symbol)
+        }
+        .buttonStyle(.plain)
+        .accessibilityHint("Opens findings filtered to \(severity) severity")
+    }
 }
 
 struct SummaryMetric: View {
@@ -146,6 +169,7 @@ struct SummaryMetric: View {
 
 struct NewScanView: View {
     @ObservedObject var coordinator: ScanCoordinator
+    @State private var profileName = ""
 
     var body: some View {
         ScrollView {
@@ -172,6 +196,54 @@ struct NewScanView: View {
                         selected: false
                     )
                 }
+
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("Reusable scan profiles")
+                                .font(.headline)
+                            Text("Profiles contain scope choices only. They never contain credentials.")
+                                .font(.callout)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        TextField("Profile name", text: $profileName)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(width: 190)
+                            .accessibilityIdentifier("scan.profile.name")
+                        Button("Save") {
+                            coordinator.saveProfile(named: profileName)
+                            profileName = ""
+                        }
+                        .disabled(profileName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    }
+                    if coordinator.savedProfiles.isEmpty {
+                        Text("No profiles saved yet")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ForEach(coordinator.savedProfiles) { profile in
+                            HStack {
+                                Image(systemName: "slider.horizontal.3")
+                                    .foregroundStyle(.red)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(profile.name).font(.callout.weight(.medium))
+                                    Text("\(profile.excludedPaths.count) exclusion(s)")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                Button("Apply") { coordinator.applyProfile(profile) }
+                                Button(role: .destructive) { coordinator.deleteProfile(profile) } label: {
+                                    Image(systemName: "trash")
+                                }
+                                .buttonStyle(.borderless)
+                                .accessibilityLabel("Delete profile \(profile.name)")
+                            }
+                        }
+                    }
+                }
+                .macScopeCard()
 
                 VStack(alignment: .leading, spacing: 14) {
                     HStack {
@@ -228,6 +300,41 @@ struct NewScanView: View {
                     scopeCard(symbol: "network", title: "Network use", text: "SOFA security data and the Grype vulnerability database may require network access. Coverage records identify failures.")
                 }
 
+                VStack(alignment: .leading, spacing: 14) {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("Enterprise preflight")
+                                .font(.headline)
+                            Text("Verifies bundled tool hashes, writable data storage, disk capacity, protected-data access, and database readiness.")
+                                .font(.callout)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        StatusPill(text: displayName(coordinator.preflightState.rawValue), color: preflightColor(coordinator.preflightState), symbol: preflightSymbol(coordinator.preflightState))
+                        Button("Run Preflight") { coordinator.runPreflight() }
+                            .disabled(coordinator.preflightState == .running)
+                            .accessibilityIdentifier("scan.preflight")
+                    }
+                    if coordinator.preflightState == .running {
+                        ProgressView("Verifying the application and scan environment…")
+                    }
+                    ForEach(coordinator.preflightChecks) { check in
+                        HStack(alignment: .top, spacing: 10) {
+                            Image(systemName: preflightSymbol(check.state))
+                                .foregroundStyle(preflightColor(check.state))
+                                .frame(width: 18)
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(check.title).font(.callout.weight(.semibold))
+                                Text(check.detail).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
+                                if let guidance = check.guidance {
+                                    Text(guidance).font(.caption).foregroundStyle(check.state == .failed ? .red : .secondary)
+                                }
+                            }
+                        }
+                    }
+                }
+                .macScopeCard()
+
                 HStack {
                     Label("Large archives can be added above as exclusions without removing the rest of their directory.", systemImage: "archivebox")
                         .foregroundStyle(.secondary)
@@ -237,7 +344,7 @@ struct NewScanView: View {
                     }
                     .buttonStyle(.borderedProminent)
                     .controlSize(.large)
-                    .disabled(coordinator.phase.isActive)
+                    .disabled(coordinator.phase.isActive || coordinator.preflightState == .failed || coordinator.preflightState == .running)
                     .accessibilityIdentifier("scan.start.setup")
                 }
                 .macScopeCard()
@@ -247,6 +354,11 @@ struct NewScanView: View {
             .frame(maxWidth: .infinity, alignment: .top)
         }
         .navigationTitle("New Scan")
+        .task {
+            if coordinator.preflightState == .pending {
+                coordinator.runPreflight()
+            }
+        }
     }
 
     private func scanChoice(title: String, subtitle: String, description: String, symbol: String, selected: Bool) -> some View {
@@ -289,16 +401,18 @@ struct LiveActivityView: View {
     @ObservedObject var coordinator: ScanCoordinator
     @State private var search = ""
     @State private var errorsOnly = false
+    @State private var collectorFilter = "all"
 
     private var visibleActivities: [ActivityEntry] {
         coordinator.activities.filter { entry in
             let matchesError = !errorsOnly || entry.isError
+            let matchesCollector = collectorFilter == "all" || entry.collectorID == collectorFilter
             let trimmedSearch = search.trimmingCharacters(in: .whitespacesAndNewlines)
             let matchesSearch = trimmedSearch.isEmpty
                 || entry.summary.localizedCaseInsensitiveContains(trimmedSearch)
                 || entry.detail.localizedCaseInsensitiveContains(trimmedSearch)
                 || entry.collectorID.localizedCaseInsensitiveContains(trimmedSearch)
-            return matchesError && matchesSearch
+            return matchesError && matchesCollector && matchesSearch
         }
     }
 
@@ -351,10 +465,25 @@ struct LiveActivityView: View {
                     Spacer()
                     Toggle("Errors only", isOn: $errorsOnly)
                         .toggleStyle(.checkbox)
+                    Picker("Instrument", selection: $collectorFilter) {
+                        Text("All instruments").tag("all")
+                        ForEach(Array(Set(coordinator.activities.map(\.collectorID))).sorted(), id: \.self) { collector in
+                            Text(collector).tag(collector)
+                        }
+                    }
+                    .frame(width: 150)
                     TextField("Filter activity", text: $search)
                         .textFieldStyle(.roundedBorder)
                         .frame(width: 220)
                         .accessibilityIdentifier("activity.search")
+                    Menu {
+                        Button("Copy Visible") { copyActivity(visibleActivities) }
+                        Divider()
+                        Button("Save Raw…") { saveRawActivity(visibleActivities) }
+                        Button("Save Redacted…") { saveRedactedActivity(visibleActivities) }
+                    } label: {
+                        Label("Export", systemImage: "square.and.arrow.up")
+                    }
                 }
                 .padding(12)
                 .background(.bar)
@@ -380,7 +509,13 @@ struct InstrumentStatusCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 7) {
             HStack {
-                Circle().fill(stateColor).frame(width: 8, height: 8)
+                if instrument.state == .running {
+                    ProgressView()
+                        .controlSize(.small)
+                        .accessibilityLabel("Indeterminate instrument progress")
+                } else {
+                    Circle().fill(stateColor).frame(width: 8, height: 8)
+                }
                 Text(instrument.name).font(.subheadline.weight(.semibold))
             }
             Text(displayName(instrument.state.rawValue))
@@ -401,6 +536,8 @@ struct InstrumentStatusCard: View {
         case .running: .orange
         case .completed: .green
         case .failed: .red
+        case .canceled: .orange
+        case .notScanned: .secondary
         }
     }
 }
@@ -510,6 +647,33 @@ struct FindingsView: View {
                     }
                     .frame(width: 180)
                 }
+                HStack(spacing: 10) {
+                    Picker("Category", selection: $coordinator.findingCategory) {
+                        Text("All categories").tag("all")
+                        ForEach(findingCategories(coordinator.scanDocument), id: \.self) { category in
+                            Text(displayName(category)).tag(category)
+                        }
+                    }
+                    .frame(width: 190)
+                    Picker("Instrument", selection: $coordinator.findingInstrument) {
+                        Text("All instruments").tag("all")
+                        ForEach(findingInstruments(coordinator.scanDocument), id: \.self) { instrument in
+                            Text(instrument).tag(instrument)
+                        }
+                    }
+                    .frame(width: 175)
+                    Picker("Confidence", selection: $coordinator.findingConfidence) {
+                        Text("All confidence").tag("all")
+                        Text("Confirmed").tag("confirmed")
+                        Text("High").tag("high")
+                        Text("Medium").tag("medium")
+                        Text("Low").tag("low")
+                    }
+                    .frame(width: 175)
+                    Toggle("Known exploited", isOn: $coordinator.findingKnownExploitedOnly).toggleStyle(.checkbox)
+                    Toggle("Admin", isOn: $coordinator.findingRequiresAdminOnly).toggleStyle(.checkbox)
+                    Toggle("Restart", isOn: $coordinator.findingRequiresRestartOnly).toggleStyle(.checkbox)
+                }
             }
             .padding(24)
 
@@ -574,6 +738,17 @@ struct FindingDisclosure: View {
                         if finding.remediation.requiresAdmin { StatusPill(text: "Administrator required", color: .orange, symbol: "lock.fill") }
                         if finding.remediation.requiresRestart { StatusPill(text: "Restart required", color: .blue, symbol: "restart") }
                     }
+                    if !finding.remediation.references.isEmpty {
+                        ForEach(finding.remediation.references, id: \.self) { reference in
+                            Button(reference) { coordinator.openReference(reference) }
+                                .buttonStyle(.link)
+                                .lineLimit(1)
+                        }
+                    }
+                    Button("Prepare verification scan") {
+                        coordinator.selectedSection = .newScan
+                    }
+                    .help("Review scope and run a new read-only scan after remediation")
                 }
 
                 detailSection("Evidence and limits") {
@@ -589,6 +764,42 @@ struct FindingDisclosure: View {
                     Text("This record describes what the cited rules observed. It does not, by itself, establish exploitation, intent, or compromise.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                    ForEach(coordinator.evidence(for: finding)) { evidence in
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(evidence.summary).font(.callout.weight(.medium))
+                            Text("\(evidence.collectorID) · \(evidence.id)")
+                                .font(.caption.monospaced())
+                                .foregroundStyle(.secondary)
+                            if let artifact = evidence.artifact {
+                                Text("Artifact: \(artifact.path)")
+                                    .font(.caption.monospaced())
+                                    .textSelection(.enabled)
+                                Text("SHA-256: \(artifact.sha256)")
+                                    .font(.caption2.monospaced())
+                                    .foregroundStyle(.secondary)
+                                    .textSelection(.enabled)
+                            }
+                        }
+                        .padding(9)
+                        .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 8))
+                    }
+                }
+
+                if !finding.affectedComponents.isEmpty {
+                    detailSection("Affected components") {
+                        ForEach(Array(finding.affectedComponents.enumerated()), id: \.offset) { _, component in
+                            HStack {
+                                Image(systemName: "cube")
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(component.name).font(.callout.weight(.medium))
+                                    Text([displayName(component.kind), component.identifier, component.version, component.path].compactMap { $0 }.joined(separator: " · "))
+                                        .font(.caption.monospaced())
+                                        .foregroundStyle(.secondary)
+                                        .textSelection(.enabled)
+                                }
+                            }
+                        }
+                    }
                 }
             }
             .padding(.top, 14)
@@ -658,9 +869,9 @@ struct InstrumentsView: View {
                     subtitle: "MacScope preserves tool identity, version, origin, executable hashes, and the results each instrument contributed."
                 )
                 if let tools = coordinator.scanDocument?.tools, !tools.isEmpty {
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 320), spacing: 14)], spacing: 14) {
+                    LazyVStack(spacing: 14) {
                         ForEach(tools) { tool in
-                            ToolCard(tool: tool)
+                            InstrumentDetailCard(tool: tool, document: coordinator.scanDocument)
                         }
                     }
                 } else {
@@ -674,6 +885,100 @@ struct InstrumentsView: View {
             .frame(maxWidth: .infinity, alignment: .top)
         }
         .navigationTitle("Instruments")
+    }
+}
+
+struct InstrumentDetailCard: View {
+    let tool: ToolRecord
+    let document: ScanDocument?
+    @State private var expanded = false
+
+    private var findings: [FindingRecord] {
+        (document?.findings ?? []).filter { $0.sources.contains { $0.toolID == tool.id } }
+    }
+
+    private var evidence: [EvidenceRecord] {
+        (document?.evidence ?? []).filter { $0.collectorID == tool.id }
+    }
+
+    private var coverage: [CoverageRecord] {
+        (document?.coverage ?? []).filter { $0.collectorID == tool.id }
+    }
+
+    var body: some View {
+        DisclosureGroup(isExpanded: $expanded) {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(spacing: 20) {
+                    LabeledContent("Findings", value: "\(findings.count)")
+                    LabeledContent("Evidence", value: "\(evidence.count)")
+                    LabeledContent("Coverage", value: "\(coverage.count)")
+                }
+                if let origin = tool.origin {
+                    LabeledContent("Upstream origin") {
+                        Text(origin).textSelection(.enabled)
+                    }
+                }
+                if let executable = tool.executable {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Executable identity").font(.subheadline.weight(.semibold))
+                        Text(executable.path).font(.caption.monospaced()).textSelection(.enabled)
+                        Text(executable.sha256).font(.caption2.monospaced()).foregroundStyle(.secondary).textSelection(.enabled)
+                    }
+                }
+                if coverage.isEmpty {
+                    Text("This instrument has no coverage records in the loaded scan.")
+                        .foregroundStyle(.secondary)
+                } else {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Assessed targets").font(.subheadline.weight(.semibold))
+                        ForEach(coverage) { record in
+                            HStack(alignment: .top) {
+                                StatusPill(text: coveragePresentationStatus(record), color: MacScopeStyle.coverageColor(record.status), symbol: coverageSymbol(record.status))
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(record.target).font(.callout)
+                                    if let reason = record.reason, !reason.isEmpty {
+                                        Text(reason).font(.caption).foregroundStyle(.secondary)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                if !findings.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Findings from this instrument").font(.subheadline.weight(.semibold))
+                        ForEach(findings.prefix(8)) { finding in CompactFindingRow(finding: finding) }
+                        if findings.count > 8 { Text("\(findings.count - 8) additional finding(s) are available in Findings.").font(.caption).foregroundStyle(.secondary) }
+                    }
+                }
+                if !evidence.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Evidence and artifacts").font(.subheadline.weight(.semibold))
+                        ForEach(evidence.prefix(10)) { record in
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(record.summary).font(.callout)
+                                Text(record.artifact?.path ?? record.id).font(.caption.monospaced()).foregroundStyle(.secondary).textSelection(.enabled)
+                            }
+                        }
+                    }
+                }
+            }
+            .padding(.top, 14)
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "checkmark.seal.fill").foregroundStyle(.green)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(tool.name).font(.headline)
+                    Text("Version \(tool.version) · \(displayName(tool.kind))")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                StatusPill(text: "\(findings.count) findings", color: findings.isEmpty ? .green : .orange, symbol: findings.isEmpty ? "checkmark" : "exclamationmark.triangle")
+            }
+        }
+        .macScopeCard()
+        .accessibilityIdentifier("instrument.\(tool.id)")
     }
 }
 
@@ -720,7 +1025,7 @@ struct CoverageView: View {
             if let coverage = coordinator.scanDocument?.coverage, !coverage.isEmpty {
                 Table(coverage) {
                     TableColumn("Status") { record in
-                        StatusPill(text: displayName(record.status), color: MacScopeStyle.coverageColor(record.status), symbol: coverageSymbol(record.status))
+                        StatusPill(text: coveragePresentationStatus(record), color: MacScopeStyle.coverageColor(record.status), symbol: coverageSymbol(record.status))
                     }
                     .width(min: 120, ideal: 140)
                     TableColumn("Area") { record in Text(displayName(record.area)) }
@@ -748,24 +1053,60 @@ struct HistoryView: View {
                 SectionHeading(
                     eyebrow: "Local evidence",
                     title: "Scan history",
-                    subtitle: "MacScope stores scans locally. A durable indexed comparison view is the next roadmap milestone; historical scan documents remain untouched."
+                    subtitle: "Validated scans remain untouched. Export exact JSON, an offline report, or a complete portable evidence directory only when you choose."
                 )
-                if let document = coordinator.scanDocument, let output = coordinator.outputDirectory {
-                    VStack(alignment: .leading, spacing: 11) {
-                        HStack {
-                            Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
-                            Text(document.runID).font(.headline.monospaced())
-                            Spacer()
-                            StatusPill(text: displayName(document.status), color: .green, symbol: "checkmark")
-                        }
-                        Text(output.path).font(.callout.monospaced()).foregroundStyle(.secondary).textSelection(.enabled)
-                        Text("\(document.findings.count) findings · \(document.coverage.count) coverage records · \(document.tools.count) instruments")
-                            .font(.callout)
-                        Button("Show Scan Folder") { coordinator.revealOutput() }
-                    }
-                    .macScopeCard()
-                } else {
+                exportStatus
+                if coordinator.history.isEmpty {
                     EmptyState(symbol: "clock.arrow.circlepath", title: "No scan in this session", message: "Completed evidence stays in ~/Library/Application Support/MacScope/Scans.")
+                } else {
+                    if let comparison = compareLatestScans(coordinator.history) {
+                        HStack(spacing: 14) {
+                            SummaryMetric(title: "New", value: "\(comparison.newCount)", detail: "Not in prior scan", color: .orange, symbol: "plus.circle")
+                            SummaryMetric(title: "Persistent", value: "\(comparison.persistentCount)", detail: "Present in both", color: .blue, symbol: "equal.circle")
+                            SummaryMetric(title: "Resolved", value: comparison.coverageComparable ? "\(comparison.resolvedCount)" : "—", detail: comparison.coverageComparable ? "Absent with comparable coverage" : "Coverage changed", color: .green, symbol: "checkmark.circle")
+                        }
+                    }
+                    ForEach(coordinator.history) { item in
+                        VStack(alignment: .leading, spacing: 11) {
+                            HStack {
+                                Image(systemName: item.document.status == "completed" ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
+                                    .foregroundStyle(item.document.status == "completed" ? .green : .orange)
+                                Text(item.document.runID).font(.headline.monospaced())
+                                Spacer()
+                                StatusPill(text: displayName(item.document.status), color: item.document.status == "completed" ? .green : .orange, symbol: item.document.status == "completed" ? "checkmark" : "exclamationmark.triangle")
+                                if coordinator.isPastRetention(item) {
+                                    StatusPill(text: "Retention review", color: .orange, symbol: "clock.badge.exclamationmark")
+                                }
+                            }
+                            Text(item.outputDirectory.path).font(.callout.monospaced()).foregroundStyle(.secondary).textSelection(.enabled)
+                            Text("\(item.document.findings.count) findings · \(item.document.coverage.count) coverage records · \(item.document.tools.count) instruments")
+                                .font(.callout)
+                            HStack {
+                                Button("Open Scan") { coordinator.loadHistoryItem(item) }
+                                Menu {
+                                    Button("Validated JSON…") { coordinator.exportValidatedJSON(item) }
+                                    Button("Offline HTML…") { coordinator.exportOfflineHTML(item) }
+                                    Divider()
+                                    Button("Portable Evidence Directory…") { coordinator.exportEvidenceBundle(item) }
+                                } label: {
+                                    Label("Export", systemImage: "square.and.arrow.up")
+                                }
+                                .disabled(coordinator.exportState.isWorking)
+                                .accessibilityIdentifier("history.export.\(item.id)")
+                                Button("Move to Trash…", role: .destructive) { coordinator.moveHistoryItemToTrash(item) }
+                                    .disabled(coordinator.phase.isActive)
+                                    .accessibilityIdentifier("history.trash.\(item.id)")
+                                Text(item.document.completedAt).font(.caption.monospaced()).foregroundStyle(.secondary)
+                            }
+                        }
+                        .macScopeCard()
+                    }
+                    ForEach(coordinator.historyWarnings, id: \.self) { warning in
+                        Label(warning, systemImage: "exclamationmark.triangle.fill")
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                            .macScopeCard()
+                    }
                 }
             }
             .frame(maxWidth: MacScopeStyle.maximumReadableWidth, alignment: .leading)
@@ -774,17 +1115,50 @@ struct HistoryView: View {
         }
         .navigationTitle("History")
     }
+
+    @ViewBuilder
+    private var exportStatus: some View {
+        switch coordinator.exportState {
+        case .idle:
+            EmptyView()
+        case let .working(message):
+            HStack(spacing: 12) {
+                ProgressView()
+                    .controlSize(.small)
+                Text(message).font(.callout.weight(.medium))
+            }
+            .macScopeCard()
+        case let .completed(message):
+            Label(message, systemImage: "checkmark.circle.fill")
+                .font(.callout)
+                .foregroundStyle(.green)
+                .textSelection(.enabled)
+                .macScopeCard()
+        case let .failed(message):
+            Label(message, systemImage: "xmark.octagon.fill")
+                .font(.callout)
+                .foregroundStyle(.red)
+                .textSelection(.enabled)
+                .macScopeCard()
+        }
+    }
 }
 
 struct FindingsLibraryView: View {
-    private let categories: [(String, String, String)] = [
-        ("OS vulnerabilities", "apple.logo", "Apple security releases, CVEs, known-exploited status, and whether the installed macOS build is current."),
-        ("Software vulnerabilities", "shippingbox", "Packages discovered by Syft and matched against the pinned Grype vulnerability database."),
-        ("Security configuration", "switch.2", "Native macOS and mSCP checks such as firewall state, Gatekeeper, SIP, FileVault, and security policy."),
-        ("Network exposure", "network", "Listening services and control state that may expose the Mac. Exposure is not proof of malicious access."),
-        ("Persistence", "arrow.triangle.2.circlepath", "Launch agents, daemons, login items, and related mechanisms. Presence alone does not establish malicious intent."),
-        ("Coverage gaps", "scope", "Targets MacScope could not inspect because of permissions, exclusions, cloud-only data, unavailable tools, or collection failure.")
-    ]
+    @ObservedObject var coordinator: ScanCoordinator
+    @State private var search = ""
+
+    private var visibleRules: [FindingsCatalogEntry] {
+        let rules = coordinator.findingsCatalog?.rules ?? []
+        let query = search.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else { return rules }
+        return rules.filter {
+            $0.title.localizedCaseInsensitiveContains(query)
+                || $0.explanation.localizedCaseInsensitiveContains(query)
+                || $0.toolID.localizedCaseInsensitiveContains(query)
+                || $0.id.localizedCaseInsensitiveContains(query)
+        }
+    }
 
     var body: some View {
         ScrollView {
@@ -792,21 +1166,56 @@ struct FindingsLibraryView: View {
                 SectionHeading(
                     eyebrow: "Master findings documentation",
                     title: "How MacScope interprets evidence",
-                    subtitle: "This reader separates detection from interpretation. The structured rule catalog will become the single source for every supported rule, remediation, limitation, and reference."
+                    subtitle: "This reader is generated from the same structured catalog the Go engine uses to validate every emitted finding source."
                 )
-                ForEach(categories, id: \.0) { category in
-                    HStack(alignment: .top, spacing: 14) {
-                        Image(systemName: category.1)
-                            .font(.title2)
-                            .foregroundStyle(.red)
-                            .frame(width: 30)
-                        VStack(alignment: .leading, spacing: 5) {
-                            Text(category.0).font(.headline)
-                            Text(category.2).foregroundStyle(.secondary)
+                TextField("Search rules, instruments, and explanations", text: $search)
+                    .textFieldStyle(.roundedBorder)
+                    .accessibilityIdentifier("catalog.search")
+                if let error = coordinator.findingsCatalogError {
+                    Label(error, systemImage: "xmark.octagon.fill")
+                        .foregroundStyle(.red)
+                        .macScopeCard()
+                } else {
+                    ForEach(visibleRules) { rule in
+                        DisclosureGroup {
+                            VStack(alignment: .leading, spacing: 14) {
+                                catalogSection("What it means", values: [rule.explanation])
+                                catalogSection("Detection logic", values: [rule.detectionLogic])
+                                catalogSection("Expected state", values: [rule.expectedState])
+                                catalogSection("Observed-state interpretation", values: [rule.observedStateInterpretation])
+                                catalogSection("Severity rationale", values: [rule.severityRationale])
+                                catalogSection("Expected evidence", values: rule.expectedEvidence)
+                                catalogSection("Possible false positives", values: rule.possibleFalsePositives)
+                                catalogSection("Interpretation limits", values: rule.limitations)
+                                catalogSection("Remediation", values: rule.remediation)
+                                catalogSection("Post-remediation verification", values: rule.verification)
+                                catalogSection("Supported macOS", values: rule.supportedMacOS)
+                                VStack(alignment: .leading, spacing: 5) {
+                                    Text("Authoritative references").font(.subheadline.weight(.semibold))
+                                    ForEach(rule.references, id: \.self) { reference in
+                                        Button(reference) { coordinator.openReference(reference) }
+                                            .buttonStyle(.link)
+                                    }
+                                }
+                            }
+                            .padding(.top, 12)
+                        } label: {
+                            HStack {
+                                Image(systemName: catalogSymbol(rule.category))
+                                    .foregroundStyle(.red)
+                                    .frame(width: 26)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(rule.title).font(.headline)
+                                    Text("\(rule.toolID) · \(rule.id) · \(displayName(rule.category))")
+                                        .font(.caption.monospaced())
+                                        .foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                StatusPill(text: rule.ruleMatch == "exact" ? rule.ruleValue : "Rule family", color: .blue, symbol: "doc.text.magnifyingglass")
+                            }
                         }
+                        .macScopeCard()
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .macScopeCard()
                 }
                 Label("A finding is a rule-backed observation. It is not automatically an incident, exploit, or attribution.", systemImage: "info.circle.fill")
                     .foregroundStyle(.secondary)
@@ -817,6 +1226,15 @@ struct FindingsLibraryView: View {
             .frame(maxWidth: .infinity, alignment: .top)
         }
         .navigationTitle("Findings Library")
+    }
+
+    private func catalogSection(_ title: String, values: [String]) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text(title).font(.subheadline.weight(.semibold))
+            ForEach(Array(values.enumerated()), id: \.offset) { _, value in
+                Text(value).foregroundStyle(.secondary).textSelection(.enabled)
+            }
+        }
     }
 }
 
@@ -839,6 +1257,28 @@ struct SettingsView: View {
                     settingRow(symbol: "icloud.slash", title: "Cloud-only files", value: "Not downloaded", detail: "Only iCloud items already available locally are eligible for scanning.")
                     Divider()
                     settingRow(symbol: "lock.shield.fill", title: "Automated remediation", value: "Disabled", detail: "Guidance is instructional and read-only in this release.")
+                    Divider()
+                    HStack(alignment: .top, spacing: 12) {
+                        Image(systemName: "clock.arrow.circlepath").foregroundStyle(.red).frame(width: 22)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("Evidence retention").font(.headline)
+                            Text("A policy only flags older scans. MacScope never deletes evidence automatically; every removal requires confirmation and moves the scan to Trash.")
+                                .font(.callout)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Picker("Evidence retention", selection: Binding(
+                            get: { coordinator.retentionPolicy },
+                            set: { coordinator.setRetentionPolicy($0) }
+                        )) {
+                            ForEach(HistoryRetentionPolicy.allCases) { policy in
+                                Text(policy.title).tag(policy)
+                            }
+                        }
+                        .labelsHidden()
+                        .frame(width: 180)
+                        .accessibilityIdentifier("settings.retention")
+                    }
                 }
                 .macScopeCard()
                 HStack {
@@ -892,8 +1332,8 @@ private func chooseFile() -> URL? {
     return panel.runModal() == .OK ? panel.url : nil
 }
 
-private func highPriorityCount(_ document: ScanDocument) -> Int {
-    document.findings.filter { ["critical", "high"].contains($0.severity) }.count
+private func severityCount(_ document: ScanDocument, _ severity: String) -> Int {
+    document.findings.filter { $0.severity == severity }.count
 }
 
 private func knownExploitedCount(_ document: ScanDocument) -> Int {
@@ -902,6 +1342,40 @@ private func knownExploitedCount(_ document: ScanDocument) -> Int {
 
 private func gapCount(_ document: ScanDocument) -> Int {
     document.coverage.filter { $0.status != "complete" }.count
+}
+
+private func findingCategories(_ document: ScanDocument?) -> [String] {
+    Array(Set((document?.findings ?? []).map(\.category))).sorted()
+}
+
+private func findingInstruments(_ document: ScanDocument?) -> [String] {
+    Array(Set((document?.findings ?? []).flatMap { $0.sources.map(\.toolID) })).sorted()
+}
+
+private struct ScanComparison {
+    let newCount: Int
+    let persistentCount: Int
+    let resolvedCount: Int
+    let coverageComparable: Bool
+}
+
+private func compareLatestScans(_ history: [ScanHistoryItem]) -> ScanComparison? {
+    guard history.count >= 2 else { return nil }
+    let current = history[0].document
+    let previous = history[1].document
+    let currentFindings = Set(current.findings.map(\.id))
+    let previousFindings = Set(previous.findings.map(\.id))
+    let currentCoverage = Dictionary(uniqueKeysWithValues: current.coverage.map { ($0.id, $0.status) })
+    let previousCoverage = Dictionary(uniqueKeysWithValues: previous.coverage.map { ($0.id, $0.status) })
+    let currentTools = Dictionary(uniqueKeysWithValues: current.tools.map { ($0.id, $0.version) })
+    let previousTools = Dictionary(uniqueKeysWithValues: previous.tools.map { ($0.id, $0.version) })
+    let coverageComparable = currentCoverage == previousCoverage && currentTools == previousTools
+    return ScanComparison(
+        newCount: currentFindings.subtracting(previousFindings).count,
+        persistentCount: currentFindings.intersection(previousFindings).count,
+        resolvedCount: previousFindings.subtracting(currentFindings).count,
+        coverageComparable: coverageComparable
+    )
 }
 
 private func shortTimestamp(_ timestamp: String) -> String {
@@ -916,5 +1390,105 @@ private func coverageSymbol(_ status: String) -> String {
     case "partial": "circle.lefthalf.filled"
     case "failed": "xmark.octagon.fill"
     default: "questionmark.circle"
+    }
+}
+
+private func coveragePresentationStatus(_ record: CoverageRecord) -> String {
+    let reason = (record.reason ?? "").lowercased()
+    if reason.contains("permission") || reason.contains("not permitted") || reason.contains("operation not permitted") {
+        return "Permission denied"
+    }
+    if reason.contains("exclude") {
+        return "Excluded"
+    }
+    if reason.contains("icloud") || reason.contains("dataless") || reason.contains("cloud-only") {
+        return "Cloud-only skipped"
+    }
+    if reason.contains("network") || reason.contains("http") || reason.contains("download") {
+        return "Network unavailable"
+    }
+    if reason.contains("unavailable") || reason.contains("not found") || reason.contains("executable") {
+        return "Tool unavailable"
+    }
+    return displayName(record.status)
+}
+
+private func preflightColor(_ state: PreflightState) -> Color {
+    switch state {
+    case .passed: .green
+    case .warning, .running: .orange
+    case .failed: .red
+    case .pending: .secondary
+    }
+}
+
+private func catalogSymbol(_ category: String) -> String {
+    switch category {
+    case "os_vulnerability": "apple.logo"
+    case "software_vulnerability": "shippingbox"
+    case "configuration": "switch.2"
+    case "network_exposure": "network"
+    case "persistence": "arrow.triangle.2.circlepath"
+    case "coverage_gap": "scope"
+    case "tool_error": "wrench.and.screwdriver"
+    default: "doc.text.magnifyingglass"
+    }
+}
+
+private func preflightSymbol(_ state: PreflightState) -> String {
+    switch state {
+    case .passed: "checkmark.circle.fill"
+    case .warning: "exclamationmark.triangle.fill"
+    case .failed: "xmark.octagon.fill"
+    case .running: "arrow.triangle.2.circlepath"
+    case .pending: "circle.dashed"
+    }
+}
+
+private func copyActivity(_ entries: [ActivityEntry]) {
+    let pasteboard = NSPasteboard.general
+    pasteboard.clearContents()
+    pasteboard.setString(renderActivity(entries), forType: .string)
+}
+
+private func saveRawActivity(_ entries: [ActivityEntry]) {
+    saveActivityText(renderActivity(entries), suggestedName: "MacScope-activity-raw.log")
+}
+
+private func saveRedactedActivity(_ entries: [ActivityEntry]) {
+    saveActivityText(redactActivity(renderActivity(entries)), suggestedName: "MacScope-activity-redacted.log")
+}
+
+private func renderActivity(_ entries: [ActivityEntry]) -> String {
+    entries.map { entry in
+        "[\(entry.timestamp)] [\(entry.collectorID)] [\(entry.kind)] \(entry.summary)\n\(entry.detail)"
+    }.joined(separator: "\n\n") + "\n"
+}
+
+private func redactActivity(_ content: String) -> String {
+    var redacted = content
+    let home = FileManager.default.homeDirectoryForCurrentUser.path
+    let username = NSUserName()
+    let hostname = Host.current().localizedName ?? ""
+    for replacement in [(home, "<HOME>"), (username, "<USER>"), (hostname, "<HOST>")] where !replacement.0.isEmpty {
+        redacted = redacted.replacingOccurrences(of: replacement.0, with: replacement.1, options: [.caseInsensitive])
+    }
+    return redacted
+}
+
+private func saveActivityText(_ content: String, suggestedName: String) {
+    let panel = NSSavePanel()
+    panel.title = "Save MacScope activity"
+    panel.nameFieldStringValue = suggestedName
+    guard panel.runModal() == .OK, let url = panel.url else { return }
+    do {
+        guard let data = content.data(using: .utf8) else {
+            throw ScanProcessError.protocolViolation("encode activity export as UTF-8")
+        }
+        try data.write(to: url, options: [.atomic, .withoutOverwriting])
+    } catch {
+        let alert = NSAlert(error: error)
+        alert.messageText = "MacScope could not save the activity export"
+        alert.runModal()
     }
 }

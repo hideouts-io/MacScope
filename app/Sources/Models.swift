@@ -69,6 +69,169 @@ enum ScanPhase: Equatable {
     }
 }
 
+enum PreflightState: String {
+    case pending
+    case running
+    case passed
+    case warning
+    case failed
+}
+
+enum ScanExportState: Equatable {
+    case idle
+    case working(String)
+    case completed(String)
+    case failed(String)
+
+    var isWorking: Bool {
+        if case .working = self { return true }
+        return false
+    }
+}
+
+struct PreflightCheck: Identifiable {
+    let id: String
+    let title: String
+    let detail: String
+    let state: PreflightState
+    let guidance: String?
+}
+
+struct SavedScanProfile: Codable, Identifiable {
+    let id: UUID
+    let name: String
+    let excludedPaths: [String]
+    let createdAt: Date
+}
+
+struct ScanHistoryItem: Identifiable {
+    let id: String
+    let reportURL: URL
+    let outputDirectory: URL
+    let document: ScanDocument
+}
+
+enum HistoryRetentionPolicy: String, Codable, CaseIterable, Identifiable {
+    case keepForever = "keep_forever"
+    case days30 = "30_days"
+    case days90 = "90_days"
+    case days180 = "180_days"
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .keepForever: "Keep all scans"
+        case .days30: "Flag after 30 days"
+        case .days90: "Flag after 90 days"
+        case .days180: "Flag after 180 days"
+        }
+    }
+
+    var ageInDays: Int? {
+        switch self {
+        case .keepForever: nil
+        case .days30: 30
+        case .days90: 90
+        case .days180: 180
+        }
+    }
+}
+
+struct AppPreferences: Codable {
+    let schemaVersion: String
+    let historyRetention: HistoryRetentionPolicy
+
+    enum CodingKeys: String, CodingKey {
+        case schemaVersion = "schema_version"
+        case historyRetention = "history_retention"
+    }
+}
+
+struct HistoryIndexDocument: Codable {
+    let schemaVersion: String
+    let generatedAt: String
+    let scans: [HistoryIndexEntry]
+
+    enum CodingKeys: String, CodingKey {
+        case schemaVersion = "schema_version"
+        case generatedAt = "generated_at"
+        case scans
+    }
+}
+
+struct HistoryIndexEntry: Codable {
+    let runID: String
+    let directoryName: String
+    let completedAt: String
+    let status: String
+    let findingCount: Int
+    let coverageCount: Int
+    let toolIdentity: [String: String]
+
+    enum CodingKeys: String, CodingKey {
+        case runID = "run_id"
+        case directoryName = "directory_name"
+        case completedAt = "completed_at"
+        case status
+        case findingCount = "finding_count"
+        case coverageCount = "coverage_count"
+        case toolIdentity = "tool_identity"
+    }
+}
+
+struct FindingsCatalogDocument: Decodable {
+    let schemaVersion: String
+    let rules: [FindingsCatalogEntry]
+
+    enum CodingKeys: String, CodingKey {
+        case schemaVersion = "schema_version"
+        case rules
+    }
+}
+
+struct FindingsCatalogEntry: Decodable, Identifiable {
+    let id: String
+    let toolID: String
+    let ruleMatch: String
+    let ruleValue: String
+    let title: String
+    let category: String
+    let explanation: String
+    let detectionLogic: String
+    let expectedState: String
+    let observedStateInterpretation: String
+    let severityRationale: String
+    let expectedEvidence: [String]
+    let possibleFalsePositives: [String]
+    let limitations: [String]
+    let remediation: [String]
+    let verification: [String]
+    let references: [String]
+    let supportedMacOS: [String]
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case toolID = "tool_id"
+        case ruleMatch = "rule_match"
+        case ruleValue = "rule_value"
+        case title
+        case category
+        case explanation
+        case detectionLogic = "detection_logic"
+        case expectedState = "expected_state"
+        case observedStateInterpretation = "observed_state_interpretation"
+        case severityRationale = "severity_rationale"
+        case expectedEvidence = "expected_evidence"
+        case possibleFalsePositives = "possible_false_positives"
+        case limitations
+        case remediation
+        case verification
+        case references
+        case supportedMacOS = "supported_macos"
+    }
+}
+
 struct ScanEventEnvelope: Decodable {
     let schemaVersion: String
     let sequence: UInt64
@@ -223,6 +386,8 @@ struct InstrumentActivity: Identifiable {
         case running
         case completed
         case failed
+        case canceled
+        case notScanned = "not_scanned"
     }
 
     let id: String

@@ -37,23 +37,36 @@ targets:
     preBuildScripts:
       - name: Bundle MacScope scan engine
         basedOnDependencyAnalysis: false
+        outputFiles:
+          - "$(BUILT_PRODUCTS_DIR)/$(CONTENTS_FOLDER_PATH)/Helpers/macscope"
+          - "$(BUILT_PRODUCTS_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/MacScopeRuntime/.tools/osquery/5.21.0/osqueryi"
+          - "$(BUILT_PRODUCTS_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/MacScopeRuntime/.tools/syft/1.50.0/syft"
+          - "$(BUILT_PRODUCTS_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/MacScopeRuntime/.tools/grype/0.116.1/grype"
+          - "$(BUILT_PRODUCTS_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/MacScopeRuntime/config/syft.yaml"
+          - "$(BUILT_PRODUCTS_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/MacScopeRuntime/config/grype.yaml"
+          - "$(BUILT_PRODUCTS_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/MacScopeRuntime/tools.lock.json"
+          - "$(BUILT_PRODUCTS_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/findings-catalog.json"
         script: |
           set -euo pipefail
 
           REPOSITORY_ROOT="${SRCROOT}/.."
           CONTENTS_ROOT="${BUILT_PRODUCTS_DIR}/${CONTENTS_FOLDER_PATH}"
           HELPER_ROOT="${CONTENTS_ROOT}/Helpers"
-          TOOL_ROOT="${CONTENTS_ROOT}/.tools"
-          CONFIG_ROOT="${CONTENTS_ROOT}/config"
+          RUNTIME_ROOT="${BUILT_PRODUCTS_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/MacScopeRuntime"
+          TOOL_ROOT="${RUNTIME_ROOT}/.tools"
+          CONFIG_ROOT="${RUNTIME_ROOT}/config"
           GO_BINARY="${REPOSITORY_ROOT}/.tools/go/bin/go"
 
           required_files=(
             "${GO_BINARY}"
             "${REPOSITORY_ROOT}/.tools/osquery/5.21.0/osqueryi"
+            "${REPOSITORY_ROOT}/.tools/osquery/5.21.0/osquery.app/Contents/MacOS/osqueryd"
             "${REPOSITORY_ROOT}/.tools/syft/1.50.0/syft"
             "${REPOSITORY_ROOT}/.tools/grype/0.116.1/grype"
             "${REPOSITORY_ROOT}/config/syft.yaml"
             "${REPOSITORY_ROOT}/config/grype.yaml"
+            "${REPOSITORY_ROOT}/tools.lock.json"
+            "${REPOSITORY_ROOT}/internal/catalog/findings-catalog.json"
           )
           for required_file in "${required_files[@]}"; do
             if [[ ! -e "${required_file}" ]]; then
@@ -64,12 +77,17 @@ targets:
 
           mkdir -p "${HELPER_ROOT}" "${TOOL_ROOT}/osquery/5.21.0" "${TOOL_ROOT}/syft/1.50.0" "${TOOL_ROOT}/grype/0.116.1" "${TOOL_ROOT}/grype/db" "${CONFIG_ROOT}"
           GOCACHE="${PROJECT_TEMP_DIR}/macscope-go-cache" "${GO_BINARY}" build -trimpath -o "${HELPER_ROOT}/macscope" "${REPOSITORY_ROOT}/cmd/macscope"
-          cp -L "${REPOSITORY_ROOT}/.tools/osquery/5.21.0/osqueryi" "${TOOL_ROOT}/osquery/5.21.0/osqueryi"
+          rm -rf "${TOOL_ROOT}/osquery/5.21.0/osquery.app"
+          ditto --norsrc --noextattr --noqtn "${REPOSITORY_ROOT}/.tools/osquery/5.21.0/osquery.app" "${TOOL_ROOT}/osquery/5.21.0/osquery.app"
+          ln -sfn "osquery.app/Contents/MacOS/osqueryd" "${TOOL_ROOT}/osquery/5.21.0/osqueryi"
           cp "${REPOSITORY_ROOT}/.tools/syft/1.50.0/syft" "${TOOL_ROOT}/syft/1.50.0/syft"
           cp "${REPOSITORY_ROOT}/.tools/grype/0.116.1/grype" "${TOOL_ROOT}/grype/0.116.1/grype"
           cp "${REPOSITORY_ROOT}/config/syft.yaml" "${CONFIG_ROOT}/syft.yaml"
           cp "${REPOSITORY_ROOT}/config/grype.yaml" "${CONFIG_ROOT}/grype.yaml"
+          cp "${REPOSITORY_ROOT}/tools.lock.json" "${RUNTIME_ROOT}/tools.lock.json"
+          cp "${REPOSITORY_ROOT}/internal/catalog/findings-catalog.json" "${BUILT_PRODUCTS_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/findings-catalog.json"
           chmod 755 "${HELPER_ROOT}/macscope" "${TOOL_ROOT}/osquery/5.21.0/osqueryi" "${TOOL_ROOT}/syft/1.50.0/syft" "${TOOL_ROOT}/grype/0.116.1/grype"
+          codesign --verify --deep --strict "${TOOL_ROOT}/osquery/5.21.0/osquery.app"
 schemes:
   MacScope:
     build:
