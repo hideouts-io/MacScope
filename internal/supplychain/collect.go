@@ -12,6 +12,7 @@ import (
 
 	"macscope/internal/artifact"
 	"macscope/internal/model"
+	"macscope/internal/progress"
 )
 
 type Collection struct {
@@ -61,11 +62,14 @@ type retryWarning struct {
 	Message     string `json:"message"`
 }
 
-func Collect(parentContext context.Context, client Client, macOSVersion string, excludedPaths []string, warningWriter io.Writer, observedAt time.Time) (Collection, error) {
+func Collect(parentContext context.Context, client Client, macOSVersion string, excludedPaths []string, warningWriter io.Writer, observedAt time.Time, progressReporter progress.Reporter) (Collection, error) {
 	if strings.TrimSpace(macOSVersion) == "" {
 		return Collection{}, fmt.Errorf("collect Syft and Grype evidence: macOS version must not be empty")
 	}
 	collection := emptyCollection()
+	if err := reportSupplyChainProgress(progressReporter, 46, "Verifying the pinned Syft executable, version, commit, and hash"); err != nil {
+		return Collection{}, err
+	}
 	syftVerification, syftVerificationErr := client.VerifySyft(parentContext)
 	if syftVerificationErr != nil {
 		updated, err := addVerificationFailure(collection, SyftToolID, client.Config().SyftExecutablePath, syftVerification, syftVerificationErr, observedAt)
@@ -81,11 +85,17 @@ func Collect(parentContext context.Context, client Client, macOSVersion string, 
 		return Collection{}, err
 	}
 
+	if err := reportSupplyChainProgress(progressReporter, 50, "Preparing startup-volume, home-directory, OneDrive, and local-iCloud scan scope"); err != nil {
+		return Collection{}, err
+	}
 	syftScope, err := client.PrepareSyftScope("/Users", excludedPaths)
 	if err != nil {
 		return Collection{}, fmt.Errorf("prepare Syft home-directory and local-iCloud scope: %w", err)
 	}
 	collection = addSyftScopeEvidence(collection, syftScope, observedAt)
+	if err := reportSupplyChainProgress(progressReporter, 55, "Scanning readable system and home-directory packages with Syft; large scopes can take time"); err != nil {
+		return Collection{}, err
+	}
 	syftResult := client.RunSyft(parentContext, macOSVersion, syftScope)
 	syftSummary, syftParseErr := parseSyftResult(syftResult)
 	collection, err = addLargeCommandOutput(collection, SyftToolID, syftResult, "evidence/syft/filesystem.sbom.syft.json", "application/vnd.syft+json", fmt.Sprintf("Syft captured %d validated package(s) from readable startup-volume and home-directory paths; %d user-selected path(s) and %d dataless iCloud item(s) were excluded before content access", syftSummary.PackageCount, syftScope.UserExcluded, syftScope.DatalessExcluded), syftParseErr)
@@ -101,6 +111,9 @@ func Collect(parentContext context.Context, client Client, macOSVersion string, 
 		return Collection{}, err
 	}
 
+	if err := reportSupplyChainProgress(progressReporter, 72, "Syft SBOM validated; verifying the pinned Grype executable"); err != nil {
+		return Collection{}, err
+	}
 	grypeVerification, grypeVerificationErr := client.VerifyGrype(parentContext)
 	if grypeVerificationErr != nil {
 		updated, addErr := addVerificationFailure(collection, GrypeToolID, client.Config().GrypeExecutablePath, grypeVerification, grypeVerificationErr, syftResult.CompletedAt)
@@ -115,6 +128,9 @@ func Collect(parentContext context.Context, client Client, macOSVersion string, 
 		return Collection{}, err
 	}
 
+	if err := reportSupplyChainProgress(progressReporter, 76, "Updating the project-local Grype vulnerability database"); err != nil {
+		return Collection{}, err
+	}
 	var updateErr error
 	collection, updateErr = updateGrypeDatabase(parentContext, collection, client, warningWriter)
 	if updateErr != nil {
@@ -123,6 +139,9 @@ func Collect(parentContext context.Context, client Client, macOSVersion string, 
 		return collection, nil
 	}
 
+	if err := reportSupplyChainProgress(progressReporter, 81, "Validating Grype database schema, age, source, and digest"); err != nil {
+		return Collection{}, err
+	}
 	statusResult := client.RunGrypeDatabaseStatus(parentContext)
 	database, statusErr := parseDatabaseStatusResult(statusResult, client.Config().GrypeDatabaseDirectory)
 	collection, err = addSmallCommand(collection, GrypeToolID, statusResult, databaseStatusSummary(database, statusErr))
@@ -136,6 +155,9 @@ func Collect(parentContext context.Context, client Client, macOSVersion string, 
 	}
 	collection.Tools = addDatabaseIdentity(collection.Tools, database)
 
+	if err := reportSupplyChainProgress(progressReporter, 85, "Matching the validated Syft SBOM against the Grype database"); err != nil {
+		return Collection{}, err
+	}
 	grypeResult := client.RunGrype(parentContext, syftResult.StandardOutput)
 	grypeDocument, grypeParseErr := parseGrypeResult(grypeResult, database)
 	collection, err = addLargeCommandOutput(collection, GrypeToolID, grypeResult, "evidence/grype/vulnerability-report.json", "application/vnd.anchore.grype+json", fmt.Sprintf("Grype produced %d unique validated vulnerability match(es) from %d raw match record(s) for %d Syft package(s)", len(grypeDocument.Matches), grypeDocument.RawMatchCount, syftSummary.PackageCount), grypeParseErr)
@@ -170,6 +192,13 @@ func Collect(parentContext context.Context, client Client, macOSVersion string, 
 	}
 	collection.Findings = appendFindings(collection.Findings, findings)
 	return collection, nil
+}
+
+func reportSupplyChainProgress(reporter progress.Reporter, percent int, message string) error {
+	if err := reporter(progress.Event{Percent: percent, Message: message}); err != nil {
+		return fmt.Errorf("report supply-chain progress at %d percent: %w", percent, err)
+	}
+	return nil
 }
 
 func emptyCollection() Collection {

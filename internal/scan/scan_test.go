@@ -14,6 +14,7 @@ import (
 	"macscope/internal/cli"
 	"macscope/internal/model"
 	osquerycollector "macscope/internal/osquery"
+	"macscope/internal/progress"
 	"macscope/internal/sofa"
 	"macscope/internal/supplychain"
 )
@@ -33,7 +34,13 @@ func TestRunWritesUnprivilegedSchemaValidatedReport(t *testing.T) {
 	defer closeServer()
 	osqueryClient := unavailableOsqueryClient(t)
 	supplyChainClient := unavailableSupplyChainClient(t)
-	result, err := run(command, executable, 501, strings.NewReader(""), os.Stderr, sofaClient, osqueryClient, supplyChainClient)
+	events := make([]progress.Event, 0)
+	progressTracker := progress.Disabled(os.Stderr)
+	progressTracker.Report = func(event progress.Event) error {
+		events = append(events, event)
+		return nil
+	}
+	result, err := run(command, executable, 501, strings.NewReader(""), os.Stderr, sofaClient, osqueryClient, supplyChainClient, progressTracker)
 	if err != nil {
 		t.Fatalf("Run returned an error: %v", err)
 	}
@@ -62,6 +69,9 @@ func TestRunWritesUnprivilegedSchemaValidatedReport(t *testing.T) {
 	if !hasCoverage(run.Coverage, "coverage.sofa.failure", model.CoverageStatusFailed) {
 		t.Fatalf("coverage = %#v, want explicit SOFA failure coverage", run.Coverage)
 	}
+	if len(events) == 0 || events[0].Percent != 2 || events[len(events)-1].Percent != 100 {
+		t.Fatalf("progress events = %#v, want scan milestones from 2 through 100 percent", events)
+	}
 }
 
 func TestRunDoesNotOverwriteExistingEvidence(t *testing.T) {
@@ -83,7 +93,7 @@ func TestRunDoesNotOverwriteExistingEvidence(t *testing.T) {
 	defer closeServer()
 	osqueryClient := unavailableOsqueryClient(t)
 	supplyChainClient := unavailableSupplyChainClient(t)
-	_, err = run(command, executable, 501, strings.NewReader(""), os.Stderr, sofaClient, osqueryClient, supplyChainClient)
+	_, err = run(command, executable, 501, strings.NewReader(""), os.Stderr, sofaClient, osqueryClient, supplyChainClient, progress.Disabled(os.Stderr))
 	if err == nil {
 		t.Fatal("Run returned nil error, want OutputError")
 	}
@@ -174,7 +184,7 @@ func TestRunRejectsRootOrchestrator(t *testing.T) {
 		PrivilegeRequested: true,
 	}
 
-	_, err := Run(command, "/tmp/macscope", 0, strings.NewReader(""), os.Stderr)
+	_, err := Run(command, "/tmp/macscope", 0, strings.NewReader(""), os.Stderr, progress.Disabled(os.Stderr))
 	if err == nil {
 		t.Fatal("Run returned nil error, want ExecutionIdentityError")
 	}
@@ -191,7 +201,7 @@ func TestRunRejectsInvalidExclusionBeforeCollection(t *testing.T) {
 	}
 	sofaClient, closeServer := invalidFeedSOFAClient(t)
 	defer closeServer()
-	_, err := run(command, "/tmp/macscope", 501, strings.NewReader(""), os.Stderr, sofaClient, unavailableOsqueryClient(t), unavailableSupplyChainClient(t))
+	_, err := run(command, "/tmp/macscope", 501, strings.NewReader(""), os.Stderr, sofaClient, unavailableOsqueryClient(t), unavailableSupplyChainClient(t), progress.Disabled(os.Stderr))
 	if err == nil || !strings.Contains(err.Error(), "path must be absolute") {
 		t.Fatalf("run error = %v, want absolute exclusion path validation error", err)
 	}

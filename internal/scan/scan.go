@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -18,6 +19,7 @@ import (
 	"macscope/internal/native"
 	osquerycollector "macscope/internal/osquery"
 	"macscope/internal/privilege"
+	"macscope/internal/progress"
 	"macscope/internal/sofa"
 	"macscope/internal/supplychain"
 	"macscope/internal/version"
@@ -61,7 +63,7 @@ func (err RuntimeEvidenceError) Unwrap() error {
 	return err.Cause
 }
 
-func Run(command cli.ScanCommand, executable string, effectiveUID int, stdin io.Reader, stderr io.Writer) (Result, error) {
+func Run(command cli.ScanCommand, executable string, effectiveUID int, stdin io.Reader, stderr io.Writer, progressTracker progress.Tracker) (Result, error) {
 	sofaClient, err := sofa.NewClient(sofa.ClientConfig{
 		Endpoint:         sofa.FeedURL,
 		UserAgent:        "MacScope/" + version.Current + " (SOFA v2 security posture integration)",
@@ -108,18 +110,24 @@ func Run(command cli.ScanCommand, executable string, effectiveUID int, stdin io.
 	if err != nil {
 		return Result{}, fmt.Errorf("configure Syft and Grype client: %w", err)
 	}
-	return run(command, executable, effectiveUID, stdin, stderr, sofaClient, osqueryClient, supplyChainClient)
+	return run(command, executable, effectiveUID, stdin, stderr, sofaClient, osqueryClient, supplyChainClient, progressTracker)
 }
 
-func run(command cli.ScanCommand, executable string, effectiveUID int, stdin io.Reader, stderr io.Writer, sofaClient sofa.Client, osqueryClient osquerycollector.Client, supplyChainClient supplychain.Client) (Result, error) {
+func run(command cli.ScanCommand, executable string, effectiveUID int, stdin io.Reader, stderr io.Writer, sofaClient sofa.Client, osqueryClient osquerycollector.Client, supplyChainClient supplychain.Client, progressTracker progress.Tracker) (Result, error) {
 	if effectiveUID == 0 {
 		return Result{}, ExecutionIdentityError{EffectiveUID: effectiveUID}
+	}
+	if err := reportProgress(progressTracker.Report, 2, "Validating scan settings and filesystem exclusions"); err != nil {
+		return Result{}, err
 	}
 	if err := supplychain.ValidateExcludedPaths(command.ExcludedPaths); err != nil {
 		return Result{}, fmt.Errorf("validate user-selected filesystem exclusions: %w", err)
 	}
 
 	startedAt := time.Now().UTC()
+	if err := reportProgress(progressTracker.Report, 5, "Collecting macOS identity, security controls, and XProtect versions"); err != nil {
+		return Result{}, err
+	}
 	unprivilegedResults := native.CollectUnprivileged(context.Background())
 	privilegedResults := make([]native.ProbeResult, 0)
 	privilegeEvidence := model.PrivilegeEvidence{
@@ -131,9 +139,22 @@ func run(command cli.ScanCommand, executable string, effectiveUID int, stdin io.
 	}
 
 	if command.PrivilegeRequested {
-		privilegedResult, err := privilege.Collect(executable, effectiveUID, stdin, stderr)
-		if err != nil {
+		if err := reportProgress(progressTracker.Report, 15, "Waiting for sudo, then reading PF and Remote Login state"); err != nil {
 			return Result{}, err
+		}
+		if err := progressTracker.Suspend(); err != nil {
+			return Result{}, fmt.Errorf("suspend progress for sudo prompt: %w", err)
+		}
+		privilegedResult, privilegeErr := privilege.Collect(executable, effectiveUID, stdin, stderr)
+		resumeErr := progressTracker.Resume()
+		if privilegeErr != nil {
+			if resumeErr != nil {
+				privilegeErr = errors.Join(privilegeErr, fmt.Errorf("resume progress after sudo prompt: %w", resumeErr))
+			}
+			return Result{}, privilegeErr
+		}
+		if resumeErr != nil {
+			return Result{}, fmt.Errorf("resume progress after sudo prompt: %w", resumeErr)
 		}
 		privilegeEvidence = model.PrivilegeEvidence{
 			Requested:                true,
@@ -143,12 +164,22 @@ func run(command cli.ScanCommand, executable string, effectiveUID int, stdin io.
 			CollectorEffectiveUID:    intPointer(privilegedResult.EffectiveUID),
 		}
 		privilegedResults = append(privilegedResults, privilegedResult.NativeResults...)
+	} else {
+		if err := reportProgress(progressTracker.Report, 15, "Recording PF and Remote Login as not scanned; --privileged was not requested"); err != nil {
+			return Result{}, err
+		}
+	}
+	if err := reportProgress(progressTracker.Report, 22, "Validating native command evidence and control findings"); err != nil {
+		return Result{}, err
 	}
 	nativeCollection, err := native.BuildCollection(unprivilegedResults, privilegedResults, command.PrivilegeRequested, time.Now().UTC())
 	if err != nil {
 		return Result{}, err
 	}
-	sofaResponse, fetchErr := sofaClient.Fetch(context.Background(), stderr)
+	if err := reportProgress(progressTracker.Report, 28, "Fetching SOFA macOS CVE, KEV, release, and XProtect data"); err != nil {
+		return Result{}, err
+	}
+	sofaResponse, fetchErr := sofaClient.Fetch(context.Background(), progressTracker.Messages)
 	var sofaCollection sofa.Collection
 	if fetchErr != nil {
 		sofaCollection = sofa.BuildFailure(sofaResponse, fetchErr)
@@ -164,13 +195,19 @@ func run(command cli.ScanCommand, executable string, effectiveUID int, stdin io.
 			sofaCollection = sofa.BuildFailure(sofaResponse, err)
 		}
 	}
+	if err := reportProgress(progressTracker.Report, 38, "Inventorying applications, persistence, listeners, and reviewed mSCP controls with osquery"); err != nil {
+		return Result{}, err
+	}
 	osqueryCollection, err := osquerycollector.Collect(context.Background(), osqueryClient, nativeCollection.HostDetails.MacOSVersion, time.Now().UTC())
 	if err != nil {
 		return Result{}, fmt.Errorf("collect osquery and mSCP evidence: %w", err)
 	}
-	supplyChainCollection, err := supplychain.Collect(context.Background(), supplyChainClient, nativeCollection.HostDetails.MacOSVersion, command.ExcludedPaths, stderr, time.Now().UTC())
+	supplyChainCollection, err := supplychain.Collect(context.Background(), supplyChainClient, nativeCollection.HostDetails.MacOSVersion, command.ExcludedPaths, progressTracker.Messages, time.Now().UTC(), progressTracker.Report)
 	if err != nil {
 		return Result{}, fmt.Errorf("collect Syft and Grype evidence: %w", err)
+	}
+	if err := reportProgress(progressTracker.Report, 92, "Assembling provenance, coverage, evidence, and findings"); err != nil {
+		return Result{}, err
 	}
 
 	runID, err := generateRunID()
@@ -243,11 +280,24 @@ func run(command cli.ScanCommand, executable string, effectiveUID int, stdin io.
 		Findings:    findings,
 	}
 
+	if err := reportProgress(progressTracker.Report, 97, "Validating hashes and writing scan.json with evidence artifacts"); err != nil {
+		return Result{}, err
+	}
 	reportPath, err := writeReport(command.OutputDirectory, run, artifacts)
 	if err != nil {
 		return Result{}, err
 	}
+	if err := reportProgress(progressTracker.Report, 100, "Scan complete; validated report and evidence written"); err != nil {
+		return Result{}, err
+	}
 	return Result{ReportPath: reportPath}, nil
+}
+
+func reportProgress(reporter progress.Reporter, percent int, message string) error {
+	if err := reporter(progress.Event{Percent: percent, Message: message}); err != nil {
+		return fmt.Errorf("report scan progress at %d percent: %w", percent, err)
+	}
+	return nil
 }
 
 func writeReport(outputDirectory string, run model.ScanRun, artifacts []artifact.Record) (string, error) {

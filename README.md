@@ -1,5 +1,9 @@
 # MacScope — macOS Security Posture & Vulnerability Scanner
 
+<p align="center">
+  <img src="assets/macscope-logo.png" alt="MacScope logo" width="360">
+</p>
+
 ### Evidence-preserving security assessment for Apple Silicon Macs
 
 ![Platform](https://img.shields.io/badge/platform-macOS-000000?logo=apple&logoColor=white)
@@ -38,6 +42,7 @@
 - [Offline HTML Report](#offline-html-report)
 - [Finding and Coverage Taxonomy](#finding-and-coverage-taxonomy)
 - [Network Use, Retries, and Timeouts](#network-use-retries-and-timeouts)
+- [Live Scan Progress](#live-scan-progress)
 - [Interactive CLI Banner](#interactive-cli-banner)
 - [Errors and Failure Behavior](#errors-and-failure-behavior)
 - [Privacy and Evidence Handling](#privacy-and-evidence-handling)
@@ -86,7 +91,8 @@ MacScope currently provides:
 - optional, narrowly scoped `sudo` collection without running the scanner as root;
 - SHA-256-linked evidence artifacts and pinned upstream provenance;
 - deterministic, JavaScript-free offline HTML reporting;
-- structured JSON warnings and errors; and
+- structured JSON warnings and errors;
+- an interactive milestone progress bar with current collector, spinner, and elapsed time; and
 - a randomized, animated ANSI/FIGlet-style terminal banner with version and build identity.
 
 ### Security interpretation
@@ -766,6 +772,37 @@ Retry warnings are emitted as structured JSON. After the final attempt, MacScope
 
 ---
 
+## Live Scan Progress
+
+When stderr is an interactive terminal, every scan displays a live red progress line:
+
+```text
+[█████████████░░░░░░░░░░░]  55% /  Scanning readable system and home-directory packages with Syft; large scopes can take time  elapsed 03:42
+```
+
+The display identifies each major phase:
+
+- scan and exclusion validation;
+- native macOS identity, security controls, and XProtect collection;
+- optional PF and Remote Login collection through `sudo`;
+- SOFA CVE, KEV, release, and XProtect retrieval;
+- osquery application, persistence, listener, and mSCP inventory;
+- Syft executable verification, scope preparation, and package scanning;
+- Grype executable verification, database update/validation, and matching; and
+- schema assembly, artifact hashing, and output writing.
+
+The percentage represents completed orchestration milestones, not a claim that MacScope knows the exact number of files Syft will inspect or packages Grype will match. During a long phase, the spinner and elapsed timer continue updating while the percentage remains at the current honest milestone.
+
+The progress line is written to stderr, pauses cleanly for the macOS `sudo` prompt, and temporarily clears itself before structured retry warnings. Piped or redirected stderr suppresses progress automatically so automation retains stable output.
+
+Set `NO_COLOR=1` or `TERM=dumb` for plain milestone lines. Disable progress completely with:
+
+```sh
+MACSCOPE_NO_PROGRESS=1 ./bin/macscope scan --output ./scan-results/example
+```
+
+---
+
 ## Interactive CLI Banner
 
 When stdout is an interactive terminal, MacScope:
@@ -877,6 +914,9 @@ MacScope/
 ├── .github/workflows/ci.yml       # macOS build and test workflow
 ├── .gitignore                     # excludes tools, builds, and private reports
 ├── README.md
+├── assets/
+│   ├── macscope-dashboard-icon.png # simplified 512 px dashboard/GitHub icon
+│   └── macscope-logo.png           # primary square MacScope logo
 ├── cmd/macscope/                  # executable entry point
 ├── config/
 │   ├── grype.yaml                 # offline matching policy
@@ -891,6 +931,7 @@ MacScope/
 │   ├── native/                    # fixed Apple-native probes
 │   ├── osquery/                   # pinned inventory collector
 │   ├── privilege/                 # narrow sudo boundary
+│   ├── progress/                  # live terminal phase and progress display
 │   ├── report/                    # deterministic offline HTML
 │   ├── scan/                      # orchestration and safe output writing
 │   ├── sofa/                      # SOFA client and assessment adapter

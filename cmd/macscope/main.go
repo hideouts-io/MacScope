@@ -3,6 +3,7 @@ package main
 import (
 	"crypto/rand"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -11,6 +12,7 @@ import (
 	"macscope/internal/banner"
 	"macscope/internal/cli"
 	"macscope/internal/privilege"
+	"macscope/internal/progress"
 	"macscope/internal/report"
 	"macscope/internal/scan"
 	"macscope/internal/version"
@@ -34,10 +36,34 @@ func main() {
 			os.Exit(1)
 		}
 	}
-	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
+	progressTracker := progress.Disabled(os.Stderr)
+	if len(os.Args) > 1 && os.Args[1] == "scan" {
+		displayProgress, err := progress.ShouldDisplay(os.Stderr, os.Getenv("MACSCOPE_NO_PROGRESS"))
+		if err != nil {
+			writeError(os.Stderr, "progress", err)
+			os.Exit(1)
+		}
+		if displayProgress {
+			if progress.ColorEnabled(os.Getenv("NO_COLOR"), os.Getenv("TERM")) {
+				progressTracker, err = progress.NewTerminal(os.Stderr, 120*time.Millisecond, time.Now)
+			} else {
+				progressTracker, err = progress.NewPlain(os.Stderr, time.Now)
+			}
+			if err != nil {
+				writeError(os.Stderr, "progress", err)
+				os.Exit(1)
+			}
+		}
+	}
+	exitCode := run(os.Args[1:], os.Stdout, os.Stderr, progressTracker)
+	if err := progressTracker.Close(); err != nil {
+		writeError(os.Stderr, "progress", err)
+		exitCode = 1
+	}
+	os.Exit(exitCode)
 }
 
-func run(arguments []string, stdout io.Writer, stderr io.Writer) int {
+func run(arguments []string, stdout io.Writer, stderr io.Writer, progressTracker progress.Tracker) int {
 	command, err := cli.Parse(arguments)
 	if err != nil {
 		writeError(stderr, "usage", err)
@@ -65,9 +91,17 @@ func run(arguments []string, stdout io.Writer, stderr io.Writer) int {
 			return 1
 		}
 
-		result, err := scan.Run(command.Scan, executable, os.Geteuid(), os.Stdin, stderr)
-		if err != nil {
-			writeError(stderr, "scan", err)
+		result, scanErr := scan.Run(command.Scan, executable, os.Geteuid(), os.Stdin, stderr, progressTracker)
+		progressErr := progressTracker.Close()
+		if scanErr != nil {
+			if progressErr != nil {
+				scanErr = errors.Join(scanErr, progressErr)
+			}
+			writeError(stderr, "scan", scanErr)
+			return 1
+		}
+		if progressErr != nil {
+			writeError(stderr, "progress", progressErr)
 			return 1
 		}
 		fmt.Fprintf(stdout, "scan report: %s\n", result.ReportPath)
