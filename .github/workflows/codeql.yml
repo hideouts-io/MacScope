@@ -55,7 +55,7 @@ jobs:
         run: go build -trimpath ./...
       - name: Build the native Swift application
         if: matrix.language == 'swift'
-        run: xcodebuild -project app/MacScope.xcodeproj -scheme MacScope -configuration Debug -destination 'platform=macOS,arch=arm64' -derivedDataPath "$RUNNER_TEMP/macscope-codeql" ARCHS=arm64 ONLY_ACTIVE_ARCH=YES SWIFT_ENABLE_EXPLICIT_MODULES=NO CODE_SIGNING_ALLOWED=NO build
+        run: xcodebuild -project app/MacScope.xcodeproj -scheme MacScope -configuration Debug -destination 'platform=macOS,arch=x86_64' -derivedDataPath "$RUNNER_TEMP/macscope-codeql" ARCHS=x86_64 ONLY_ACTIVE_ARCH=YES SWIFT_ENABLE_EXPLICIT_MODULES=NO CODE_SIGNING_ALLOWED=NO build
       - name: Analyze without a security write token
         uses: github/codeql-action/analyze@24c54180a607b1449ed407dd24f251e4e9147c8d # v4
         with:
