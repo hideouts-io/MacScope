@@ -55,7 +55,7 @@ jobs:
         run: go build -trimpath ./...
       - name: Build the native Swift application
         if: matrix.language == 'swift'
-        run: xcodebuild -project app/MacScope.xcodeproj -scheme MacScope -configuration Debug -derivedDataPath "$RUNNER_TEMP/macscope-codeql" ARCHS=arm64 CODE_SIGNING_ALLOWED=NO build
+        run: xcodebuild -project app/MacScope.xcodeproj -scheme MacScope -configuration Debug -destination 'platform=macOS,arch=x86_64' -derivedDataPath "$RUNNER_TEMP/macscope-codeql" ARCHS=x86_64 ONLY_ACTIVE_ARCH=YES SWIFT_ENABLE_EXPLICIT_MODULES=NO SWIFT_USE_INTEGRATED_DRIVER=NO COMPILATION_CACHE_ENABLE_CACHING=NO SWIFT_ENABLE_COMPILE_CACHE=NO CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO build
       - name: Analyze without a security write token
         uses: github/codeql-action/analyze@24c54180a607b1449ed407dd24f251e4e9147c8d # v4
         with:
@@ -63,7 +63,35 @@ jobs:
           output: ${{ runner.temp }}/codeql-results
           upload: never
           upload-database: false
+      - name: Reject Swift extraction errors
+        if: matrix.language == 'swift'
+        env:
+          SARIF_FILE: ${{ runner.temp }}/codeql-results/swift.sarif
+        run: |
+          if [[ ! -s "$SARIF_FILE" ]]; then
+            printf 'Swift SARIF is missing or empty.\n' >&2
+            exit 1
+          fi
+          error_count="$(jq -er '
+            if type != "object" or (.runs | type) != "array" or (.runs | length) == 0 then
+              error("Invalid Swift SARIF runs")
+            elif any(.runs[]; type != "object" or (.invocations | type) != "array" or (.invocations | length) == 0) then
+              error("Invalid Swift SARIF invocations")
+            elif any(.runs[].invocations[]; type != "object" or (.toolExecutionNotifications | type) != "array") then
+              error("Invalid Swift SARIF notifications")
+            elif any(.runs[].invocations[].toolExecutionNotifications[]; type != "object" or (.descriptor | type) != "object" or (.descriptor.id | type) != "string") then
+              error("Invalid Swift SARIF notification descriptor")
+            else
+              [.runs[].invocations[].toolExecutionNotifications[] | select(.descriptor.id == "swift/diagnostics/extraction-errors")] | length
+            end
+          ' "$SARIF_FILE")"
+          if [[ "$error_count" != "0" ]]; then
+            printf 'Swift extraction reported %s compiler diagnostics; inspect the analysis diagnostics before publishing SARIF.\n' "$error_count" >&2
+            exit 1
+          fi
+          printf 'Swift extraction compiler diagnostics: 0\n'
       - name: Retain analysis for the isolated upload job
+        if: success() || failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: codeql-${{ matrix.language }}
