@@ -50,9 +50,9 @@ jobs:
         with:
           languages: ${{ matrix.language }}
           build-mode: ${{ matrix.build-mode }}
-      - name: Build the Go scanner without running it
+      - name: Build every Go production package without running it
         if: matrix.language == 'go'
-        run: go build -trimpath -o "$RUNNER_TEMP/macscope" ./cmd/macscope
+        run: go build -trimpath ./...
       - name: Build the native Swift application
         if: matrix.language == 'swift'
         run: xcodebuild -project app/MacScope.xcodeproj -scheme MacScope -configuration Debug -derivedDataPath "$RUNNER_TEMP/macscope-codeql" ARCHS=arm64 CODE_SIGNING_ALLOWED=NO build
