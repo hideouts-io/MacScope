@@ -59,3 +59,20 @@ jobs:
             printf 'unexpected help output: %s\n' "${first_line}"
             exit 1
           fi
+
+  swift:
+    name: Swift app build
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Prepare pinned runtime build components
+        run: bash .github/scripts/prepare-macos-runtime.sh "$GITHUB_WORKSPACE" "$RUNNER_TEMP/macscope-runtime"
+      - name: Build the native Swift application
+        run: xcodebuild -project app/MacScope.xcodeproj -scheme MacScope -configuration Debug -derivedDataPath "$RUNNER_TEMP/macscope-derived" ARCHS=arm64 CODE_SIGNING_ALLOWED=NO build
